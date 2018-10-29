@@ -40,11 +40,10 @@ LOCAL_C_INCLUDES += \
     external/skia/include/core \
     external/skia/include/images \
     $(TARGET_OUT_HEADERS)/qcom/display \
-    $(LOCAL_HAL_TOP)/QCamera2/stack/common \
-    $(LOCAL_HAL_TOP)/QCamera2/stack/mm-camera-interface/inc \
-    $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include
+    $(LOCAL_PATH)/QCamera2/stack/common \
+    $(LOCAL_PATH)/QCamera2/stack/mm-camera-interface/inc
 
-LOCAL_ADDITIONAL_DEPENDENCIES := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr
+LOCAL_HEADER_LIBRARIES := generated_kernel_headers
 
 LOCAL_MODULE:= camera_test
 LOCAL_VENDOR_MODULE := true
