@@ -3,8 +3,8 @@ LOCAL_PATH := $(call my-dir)
 
 include $(CLEAR_VARS)
 
-LOCAL_HEADER_LIBRARIES := camera_common_headers
-LOCAL_HEADER_LIBRARIES += libhardware_headers
+LOCAL_HEADER_LIBRARIES := libhardware_headers
+LOCAL_HEADER_LIBRARIES += camera_common_headers
 LOCAL_HEADER_LIBRARIES += media_plugin_headers
 LOCAL_HEADER_LIBRARIES += generated_kernel_headers
 
@@ -17,11 +17,6 @@ src/mm_camera_stream.c \
 src/mm_camera_thread.c \
 src/mm_camera_sock.c
 
-ifeq ($(CAMERA_DAEMON_NOT_PRESENT), true)
-else
-LOCAL_CFLAGS += -DDAEMON_PRESENT
-endif
-
 # System header file path prefix
 LOCAL_CFLAGS += -DSYSTEM_HEADER_PREFIX=sys
 
@@ -29,7 +24,11 @@ ifeq ($(strip $(TARGET_USES_ION)),true)
 LOCAL_CFLAGS += -DUSE_ION
 endif
 
-ifneq (,$(filter msm8974 msm8916 msm8226 msm8610 apq8084 msm8084 msm8994 msm8992 msm8952 msm8937 msm8953 msm8996 sdm660 msm8998 apq8098_latv, $(TARGET_BOARD_PLATFORM)))
+ifeq ($(shell expr $(TARGET_KERNEL_VERSION) \>= 4.4), 1)
+LOCAL_CFLAGS += -DUSE_KERNEL_VERSION_GE_4_4_DEFS
+endif
+
+ifneq (,$(filter msm8974 msm8916 msm8226 msm8610 msm8916 apq8084 msm8084 msm8994 msm8992 msm8952 msm8937 msm8953 msm8996 sdm660 msm8998 apq8098_latv, $(TARGET_BOARD_PLATFORM)))
     LOCAL_CFLAGS += -DVENUS_PRESENT
 endif
 
@@ -56,7 +55,7 @@ LOCAL_CFLAGS += -include bionic/libc/kernel/common/linux/un.h
 endif
 
 LOCAL_CFLAGS += -Wall -Wextra -Werror
-ifneq (,$(filter $(strip $(SOMC_KERNEL_VERSION)),4.9 4.14))
+ifeq ($(TARGET_KERNEL_VERSION), 4.9)
 LOCAL_CFLAGS += -DUSE_4_9_DEFS
 endif
 
@@ -66,11 +65,10 @@ LOCAL_MODULE           := libmmcamera_interface
 include $(SDCLANG_COMMON_DEFS)
 
 LOCAL_SHARED_LIBRARIES := libdl libcutils liblog \
-                          libhal_dbg libutils
+                          libhal_dbg
 
-LOCAL_HEADER_LIBRARIES := libhardware_headers
 LOCAL_MODULE_TAGS := optional
-LOCAL_MODULE_PATH_32 := $(TARGET_OUT_VENDOR)/lib
+LOCAL_VENDOR_MODULE := true
 
 LOCAL_32_BIT_ONLY := $(BOARD_QTI_CAMERA_32BIT_ONLY)
 include $(BUILD_SHARED_LIBRARY)

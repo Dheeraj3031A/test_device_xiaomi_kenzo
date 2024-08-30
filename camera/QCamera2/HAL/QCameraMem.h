@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2017, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -32,10 +32,6 @@
 
 // System dependencies
 #include <linux/msm_ion.h>
-#if TARGET_ION_ABI_VERSION >= 2
-#include <ion/ion.h>
-#include <linux/dma-buf.h>
-#endif //TARGET_ION_ABI_VERSION
 #include <utils/Mutex.h>
 #include <utils/List.h>
 
@@ -51,23 +47,9 @@
 extern "C" {
 #include "mm_camera_interface.h"
 }
-#if TARGET_ION_ABI_VERSION >= 2
-#ifndef CAM_CACHE_OPS
-#define CAM_CACHE_OPS
-enum {
-    CAM_CLEAN_CACHE,
-    CAM_INV_CACHE,
-    CAM_CLEAN_INV_CACHE
-};
-#define ION_IOC_CLEAN_CACHES CAM_CLEAN_CACHE
-#define ION_IOC_INV_CACHES CAM_INV_CACHE
-#define ION_IOC_CLEAN_INV_CACHES CAM_CLEAN_INV_CACHE
-#endif //CAM_CACHE_OPS
-#endif //TARGET_ION_ABI_VERSION
 
 namespace qcamera {
 
-using namespace android;
 class QCameraMemoryPool;
 
 //Buffer identity
@@ -119,7 +101,6 @@ public:
     {
         return cacheOps(index, ION_IOC_CLEAN_INV_CACHES);
     }
-
     int getFd(uint32_t index) const;
     ssize_t getSize(uint32_t index) const;
     uint8_t getCnt() const;

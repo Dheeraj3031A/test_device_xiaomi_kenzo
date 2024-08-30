@@ -29,10 +29,10 @@
 
 // System dependencies
 #include <stdlib.h>
-#include <unistd.h>
 #include <pthread.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <unistd.h>
 #include <media/msm_media_info.h>
 #define TIME_H <SYSTEM_HEADER_PREFIX/time.h>
 #include TIME_H
@@ -5247,3 +5247,4 @@ int32_t mm_stream_handle_cache_ops(mm_stream_t* my_obj,
 
     return rc;
 }
+

@@ -32,10 +32,6 @@
 
 // System dependencies
 #include <linux/msm_ion.h>
-#if TARGET_ION_ABI_VERSION >= 2
-#include <ion/ion.h>
-#include <linux/dma-buf.h>
-#endif //TARGET_ION_ABI_VERSION
 #include <utils/Mutex.h>
 
 // Camera dependencies
@@ -44,20 +40,7 @@
 extern "C" {
 #include "mm_camera_interface.h"
 }
-#if TARGET_ION_ABI_VERSION >= 2
-#ifndef CAM_CACHE_OPS
-#define CAM_CACHE_OPS
-enum {
-    CAM_CLEAN_CACHE,
-    CAM_INV_CACHE,
-    CAM_CLEAN_INV_CACHE
-};
 
-#define ION_IOC_CLEAN_CACHES CAM_CLEAN_CACHE
-#define ION_IOC_INV_CACHES CAM_INV_CACHE
-#define ION_IOC_CLEAN_INV_CACHES CAM_CLEAN_INV_CACHE
-#endif //CAM_CACHE_OPS
-#endif //TARGET_ION_ABI_VERSION
 using namespace android;
 
 namespace qcamera {
@@ -164,6 +147,7 @@ public:
     virtual int32_t getOldestFrameNumber(uint32_t &index);
 
     void *getBufferHandle(uint32_t index);
+    void switchMaster(uint32_t masterCam);
 protected:
     virtual void *getPtrLocked(uint32_t index);
 private:
@@ -173,6 +157,7 @@ private:
     struct private_handle_t *mPrivateHandle[MM_CAMERA_MAX_NUM_FRAMES];
 
     uint32_t mStartIdx;
+    uint32_t mMasterCam;
 };
 };
 #endif

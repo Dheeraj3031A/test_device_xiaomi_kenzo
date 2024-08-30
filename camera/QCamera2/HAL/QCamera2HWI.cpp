@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -931,7 +931,12 @@ int QCamera2HardwareInterface::take_picture(struct camera_device *device)
 
     // Acquire the perf lock for JPEG snapshot only
     if (hw->mParameters.isJpegPictureFormat()) {
-        hw->m_perfLockMgr.acquirePerfLock(PERF_LOCK_TAKE_SNAPSHOT);
+        if (hw->isDualCamera() && (hw->mParameters.getHalPPType() == CAM_HAL_PP_TYPE_BOKEH)) {
+            hw->m_perfLockMgr.acquirePerfLock(PERF_LOCK_BOKEH_SNAPSHOT,
+                    PERF_LOCK_BOKEH_SNAP_TIMEOUT_MS);
+        } else {
+            hw->m_perfLockMgr.acquirePerfLock(PERF_LOCK_TAKE_SNAPSHOT);
+        }
     }
 
     qcamera_api_result_t apiResult;
@@ -4426,6 +4431,12 @@ int QCamera2HardwareInterface::autoFocus()
             // Force the cameras to stream for auto focus on both
             forceCameraWakeup();
         }
+        //Send dummy focus event if the active camera doesn't support AF.
+        if (isDualCamera() && !mParameters.isAutoFocusSupported(mActiveCameras)) {
+            mActiveAF = false;
+            rc = sendEvtNotify(CAMERA_MSG_FOCUS, true, 0);
+            break;
+        }
         LOGI("Send AUTO FOCUS event. focusMode=%d, m_currentFocusState=%d \
                 mActiveCameras %d, mMasterCamera %d",
                 focusMode, m_currentFocusState, mActiveCameras, mMasterCamera);
@@ -5174,6 +5185,8 @@ int QCamera2HardwareInterface::takePicture()
 
             if(mParameters.getHalPPType() == CAM_HAL_PP_TYPE_NONE) {
                 dualfov_snap_num = MM_CAMERA_MAX_CAM_CNT;
+            } else if (mParameters.getHalPPType() == CAM_HAL_PP_TYPE_BOKEH) {
+                dualfov_snap_num = NUM_BOKEH_OUTPUT;
             }
 
             dualfov_snap_num = (dualfov_snap_num == 0) ? 1 : dualfov_snap_num;
@@ -6524,7 +6537,8 @@ int QCamera2HardwareInterface::registerFaceImage(void *img_ptr,
     }
     memcpy(pBufPtr, img_ptr, config->input_buf_planes.plane_info.frame_len);
     //Do cache ops before sending for reprocess
-    imgBuf->cleanInvalidateCache(0);
+    imgBuf->cacheOps(0, ION_IOC_CLEAN_INV_CACHES);
+
     cam_pp_feature_config_t pp_feature;
     memset(&pp_feature, 0, sizeof(cam_pp_feature_config_t));
     pp_feature.feature_mask = CAM_QCOM_FEATURE_REGISTER_FACE;
@@ -7286,13 +7300,18 @@ int32_t QCamera2HardwareInterface::processLEDCalibration(int32_t value)
  *              NO_ERROR  -- success
  *              none-zero failure code
  *==========================================================================*/
-int32_t QCamera2HardwareInterface::processRTBData(cam_rtb_msg_type_t rtbData)
+int32_t QCamera2HardwareInterface::processRTBData(
+        __unused cam_rtb_msg_type_t rtbData)
 {
     int32_t rc = NO_ERROR;
 
+#ifndef VANILLA_HAL
     //Check if we are in real time bokeh mode
     if (isDualCamera() && (mParameters.getHalPPType() == CAM_HAL_PP_TYPE_BOKEH)) {
         LOGH("DC RTB metadata: msgType: %d",rtbData);
+
+        mParameters.setBokehSnaphot(rtbData == CAM_RTB_MSG_DEPTH_EFFECT_SUCCESS);
+
         int32_t data_len = sizeof(rtbData);
         int32_t buffer_len = sizeof(rtbData)       //meta type
                 + sizeof(int)                  //data len
@@ -7318,9 +7337,7 @@ int32_t QCamera2HardwareInterface::processRTBData(cam_rtb_msg_type_t rtbData)
         qcamera_callback_argm_t cbArg;
         memset(&cbArg, 0, sizeof(qcamera_callback_argm_t));
         cbArg.cb_type = QCAMERA_DATA_CALLBACK;
-#ifndef VANILLA_HAL
         cbArg.msg_type = CAMERA_MSG_META_DATA;
-#endif
         cbArg.data = buffer;
         cbArg.user_data = buffer;
         cbArg.cookie = this;
@@ -7331,6 +7348,7 @@ int32_t QCamera2HardwareInterface::processRTBData(cam_rtb_msg_type_t rtbData)
             buffer->release(buffer);
         }
     }
+#endif
     return rc;
 }
 
@@ -11877,6 +11895,7 @@ bool QCamera2HardwareInterface::isLowPowerMode()
     bool isLowpower = mParameters.getRecordingHintValue() && enable
             && ((dim.width * dim.height) >= (2048 * 1080));
     isLowpower = isLowpower || (mParameters.isHfrMode() && !mParameters.getBufBatchCount());
+    mParameters.setLowPower(isLowpower);
     LOGD("low power mode %d",isLowpower);
     return isLowpower;
 }
@@ -11969,6 +11988,8 @@ void QCamera2HardwareInterface::configureSnapshotSkip(bool skip)
                     }
                 }
             }
+            if (skip)
+                ((QCameraPicChannel *)pChannel)->flushSuperbuffer(mActiveCameras, 0);
         }
     }
 }

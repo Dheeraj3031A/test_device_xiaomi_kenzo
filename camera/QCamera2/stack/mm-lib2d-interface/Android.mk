@@ -16,7 +16,7 @@ LOCAL_C_INCLUDES += \
     $(IMGLIB_HEADER_PATH) \
     $(LOCAL_PATH)/inc \
     $(LOCAL_PATH)/../common \
-    $(LOCAL_PATH)/../mm-camera-interface/inc
+    $(LOCAL_PATH)/../mm-camera-interface/inc \
 
 LOCAL_HEADER_LIBRARIES += libutils_headers
 ifeq ($(strip $(TARGET_USES_ION)),true)
@@ -30,12 +30,9 @@ LOCAL_SRC_FILES := \
 LOCAL_MODULE           := libmmlib2d_interface
 include $(SDCLANG_COMMON_DEFS)
 LOCAL_PRELINK_MODULE   := false
-LOCAL_SHARED_LIBRARIES := libdl libcutils liblog
-ifneq (,$(filter $(strip $(SOMC_KERNEL_VERSION)),4.9 4.14))
-LOCAL_SHARED_LIBRARIES += libion
-endif
+LOCAL_SHARED_LIBRARIES := libdl libcutils liblog libmmcamera_interface
 LOCAL_MODULE_TAGS := optional
-LOCAL_MODULE_PATH_32 := $(TARGET_OUT_VENDOR)/lib
+LOCAL_VENDOR_MODULE := true
 
 LOCAL_32_BIT_ONLY := $(BOARD_QTI_CAMERA_32BIT_ONLY)
 include $(BUILD_SHARED_LIBRARY)

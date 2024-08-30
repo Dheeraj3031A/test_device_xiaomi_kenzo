@@ -22,28 +22,21 @@ LOCAL_SHARED_LIBRARIES:= \
 ifneq (1,$(filter 1,$(shell echo "$$(( $(PLATFORM_SDK_VERSION) >= 18 ))" )))
 
 LOCAL_SHARED_LIBRARIES += \
-    libmedia_native
-ifneq (,$(filter $(strip $(SOMC_KERNEL_VERSION)),4.9 4.14))
-LOCAL_SHARED_LIBRARIES += libion
-endif
+    libmedia_native \
+
 LOCAL_32_BIT_ONLY := $(BOARD_QTI_CAMERA_32BIT_ONLY)
 LOCAL_CFLAGS += -DUSE_JB_MR1
 
 endif
 
-LOCAL_HAL_TOP := $(LOCAL_PATH)/../../..
-LOCAL_C_INCLUDES += \
-        system/core/libion/kernel-headers \
-        system/core/libion/include
-
 LOCAL_C_INCLUDES += \
     external/skia/include/core \
     external/skia/include/images \
-    $(TARGET_OUT_HEADERS)/qcom/display \
     $(LOCAL_PATH)/QCamera2/stack/common \
     $(LOCAL_PATH)/QCamera2/stack/mm-camera-interface/inc
 
 LOCAL_HEADER_LIBRARIES := generated_kernel_headers
+LOCAL_HEADER_LIBRARIES += display_headers
 
 LOCAL_MODULE:= camera_test
 LOCAL_VENDOR_MODULE := true

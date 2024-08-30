@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2017, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -34,10 +34,9 @@
 #include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <sys/ioctl.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
 #include <linux/msm_ion.h>
-
 #define MMAN_H <SYSTEM_HEADER_PREFIX/mman.h>
 #include MMAN_H
 
@@ -50,19 +49,6 @@ static int thread_status = 0;
 static pthread_cond_t app_cond_v;
 
 #define MM_QCAMERA_APP_NANOSEC_SCALE 1000000000
-#if TARGET_ION_ABI_VERSION >= 2
-#ifndef CAM_CACHE_OPS
-#define CAM_CACHE_OPS
-enum {
-    CAM_CLEAN_CACHE,
-    CAM_INV_CACHE,
-    CAM_CLEAN_INV_CACHE
-};
-#define ION_IOC_CLEAN_CACHES CAM_CLEAN_CACHE
-#define ION_IOC_INV_CACHES CAM_INV_CACHE
-#define ION_IOC_CLEAN_INV_CACHES CAM_CLEAN_INV_CACHE
-#endif //CAM_CACHE_OPS
-#endif //TARGET_ION_ABI_VERSION
 
 int mm_camera_app_timedwait(uint8_t seconds)
 {
@@ -136,51 +122,38 @@ int mm_app_allocate_ion_memory(mm_camera_app_buf_t *buf,
         __unused unsigned int ion_type)
 {
     int rc = MM_CAMERA_OK;
+    struct ion_handle_data handle_data;
     struct ion_allocation_data alloc;
     struct ion_fd_data ion_info_fd;
     int main_ion_fd = -1;
     void *data = NULL;
 
-#ifndef TARGET_ION_ABI_VERSION
-    struct ion_handle_data handle_data;
     main_ion_fd = open("/dev/ion", O_RDONLY);
-#else
-    main_ion_fd = ion_open();
-#endif //TARGET_ION_ABI_VERSION
     if (main_ion_fd <= 0) {
         LOGE("Ion dev open failed %s\n", strerror(errno));
         goto ION_OPEN_FAILED;
     }
 
-    memset(&ion_info_fd, 0, sizeof(ion_info_fd));
     memset(&alloc, 0, sizeof(alloc));
     alloc.len = buf->mem_info.size;
     /* to make it page size aligned */
     alloc.len = (alloc.len + 4095U) & (~4095U);
     alloc.align = 4096;
-    alloc.heap_id_mask = ION_HEAP(ION_SYSTEM_HEAP_ID);
     alloc.flags = ION_FLAG_CACHED;
-#ifndef TARGET_ION_ABI_VERSION
+    alloc.heap_id_mask = ION_HEAP(ION_SYSTEM_HEAP_ID);
     rc = ioctl(main_ion_fd, ION_IOC_ALLOC, &alloc);
-#else
-    rc = ion_alloc_fd(main_ion_fd, alloc.len, alloc.align, alloc.heap_id_mask,
-              alloc.flags, &ion_info_fd.fd);
-#endif //TARGET_ION_ABI_VERSION
     if (rc < 0) {
         LOGE("ION allocation failed %s with rc = %d \n",strerror(errno), rc);
         goto ION_ALLOC_FAILED;
     }
 
-#ifndef TARGET_ION_ABI_VERSION
+    memset(&ion_info_fd, 0, sizeof(ion_info_fd));
     ion_info_fd.handle = alloc.handle;
     rc = ioctl(main_ion_fd, ION_IOC_SHARE, &ion_info_fd);
     if (rc < 0) {
         LOGE("ION map failed %s\n", strerror(errno));
         goto ION_MAP_FAILED;
     }
-#else
-    ion_info_fd.handle = ion_info_fd.fd;
-#endif //TARGET_ION_ABI_VERSION
 
     data = mmap(NULL,
                 alloc.len,
@@ -193,7 +166,6 @@ int mm_app_allocate_ion_memory(mm_camera_app_buf_t *buf,
         LOGE("ION_MMAP_FAILED: %s (%d)\n", strerror(errno), errno);
         goto ION_MAP_FAILED;
     }
-
     buf->mem_info.main_ion_fd = main_ion_fd;
     buf->mem_info.fd = ion_info_fd.fd;
     buf->mem_info.handle = ion_info_fd.handle;
@@ -202,19 +174,11 @@ int mm_app_allocate_ion_memory(mm_camera_app_buf_t *buf,
     return MM_CAMERA_OK;
 
 ION_MAP_FAILED:
-#ifndef TARGET_ION_ABI_VERSION
     memset(&handle_data, 0, sizeof(handle_data));
     handle_data.handle = ion_info_fd.handle;
     ioctl(main_ion_fd, ION_IOC_FREE, &handle_data);
-#else
-    close(ion_info_fd.fd);
-#endif //TARGET_ION_ABI_VERSION
 ION_ALLOC_FAILED:
-#ifndef TARGET_ION_ABI_VERSION
     close(main_ion_fd);
-#else
-    ion_close(main_ion_fd);
-#endif //TARGET_ION_ABI_VERSION
 ION_OPEN_FAILED:
     return -MM_CAMERA_E_GENERAL;
 }
@@ -234,13 +198,8 @@ int mm_app_deallocate_ion_memory(mm_camera_app_buf_t *buf)
   if (buf->mem_info.main_ion_fd >= 0) {
       memset(&handle_data, 0, sizeof(handle_data));
       handle_data.handle = buf->mem_info.handle;
-#ifndef  TARGET_ION_ABI_VERSION
       ioctl(buf->mem_info.main_ion_fd, ION_IOC_FREE, &handle_data);
       close(buf->mem_info.main_ion_fd);
-#else
-        close(handle_data.handle);
-        ion_close(buf->mem_info.main_ion_fd);
-#endif  // TARGET_ION_ABI_VERSION
       buf->mem_info.main_ion_fd = -1;
   }
   return rc;
@@ -250,10 +209,9 @@ int mm_app_deallocate_ion_memory(mm_camera_app_buf_t *buf)
 int mm_app_cache_ops(mm_camera_app_meminfo_t *mem_info,
                      int cmd)
 {
-    int ret = MM_CAMERA_OK;
-#ifndef  TARGET_ION_ABI_VERSION
     struct ion_flush_data cache_inv_data;
     struct ion_custom_data custom_data;
+    int ret = MM_CAMERA_OK;
 
 #ifdef USE_ION
     if (NULL == mem_info) {
@@ -281,43 +239,7 @@ int mm_app_cache_ops(mm_camera_app_meminfo_t *mem_info,
         }
     }
 #endif
-#else
-  struct dma_buf_sync buf_sync_start;
-  struct dma_buf_sync buf_sync_end;
 
-  /* ION_IOC_CLEAN_CACHES-->call the DMA_BUF_IOCTL_SYNC IOCTL with flags DMA_BUF_SYNC_START
-     and DMA_BUF_SYNC_WRITE and then call the DMA_BUF_IOCTL_SYNC IOCTL with flags DMA_BUF_SYNC_END
-     and DMA_BUF_SYNC_WRITE
-     ION_IOC_INV_CACHES-->call the DMA_BUF_IOCTL_SYNC IOCT with flags DMA_BUF_SYNC_START and
-     DMA_BUF_SYNC_WRITE and then call the DMA_BUF_IOCTL_SYNC IOCT with flags DMA_BUF_SYNC_END
-     and DMA_BUF_SYNC_READ
-  */
-
-  switch (cmd) {
-  case CAM_INV_CACHE:
-    buf_sync_start.flags = DMA_BUF_SYNC_START | DMA_BUF_SYNC_WRITE;
-    buf_sync_end.flags   = DMA_BUF_SYNC_END   | DMA_BUF_SYNC_READ;
-    break;
-  case CAM_CLEAN_CACHE:
-    buf_sync_start.flags = DMA_BUF_SYNC_START | DMA_BUF_SYNC_WRITE;
-    buf_sync_end.flags   = DMA_BUF_SYNC_END   | DMA_BUF_SYNC_WRITE;
-    break;
-  default:
-  case CAM_CLEAN_INV_CACHE:
-    buf_sync_start.flags = DMA_BUF_SYNC_START | DMA_BUF_SYNC_RW;
-    buf_sync_end.flags   = DMA_BUF_SYNC_END   | DMA_BUF_SYNC_RW;
-    break;
-  }
-
-  ret= ioctl(mem_info->fd, DMA_BUF_IOCTL_SYNC, &buf_sync_start.flags);
-  if (ret) {
-      LOGE("Failed first DMA_BUF_IOCTL_SYNC start\n");
-  }
-  ret = ioctl(mem_info->fd, DMA_BUF_IOCTL_SYNC, &buf_sync_end.flags);
-  if (ret) {
-      LOGE("Failed first DMA_BUF_IOCTL_SYNC End\n");
-  }
-#endif  // TARGET_ION_ABI_VERSION
     return ret;
 }
 

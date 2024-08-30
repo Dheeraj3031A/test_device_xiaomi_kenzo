@@ -7,6 +7,12 @@ include $(CLEAR_VARS)
 SDCLANG_COMMON_DEFS := $(LOCAL_PATH)/sdllvm-common-defs.mk
 SDCLANG_FLAG_DEFS := $(LOCAL_PATH)/sdllvm-flag-defs.mk
 
+ifneq ($(call is-platform-sdk-version-at-least,28),true)
+IS_QC_BOKEH_SUPPORTED := true
+else
+IS_QC_BOKEH_SUPPORTED := false
+endif
+
 LOCAL_SRC_FILES := \
         util/QCameraBufferMaps.cpp \
         util/QCameraCmdThread.cpp \
@@ -31,7 +37,11 @@ LOCAL_SRC_FILES += \
         HAL3/QCamera3CropRegionMapper.cpp \
         HAL3/QCamera3StreamMem.cpp
 
+ifeq (1,$(filter 1,$(shell echo "$$(( $(PLATFORM_SDK_VERSION) >= 31 ))" )))
+LOCAL_CFLAGS := -Wall -Wextra -Werror -Wno-compound-token-split-by-macro
+else
 LOCAL_CFLAGS := -Wall -Wextra -Werror
+endif
 LOCAL_CFLAGS += -DFDLEAK_FLAG
 LOCAL_CFLAGS += -DMEMLEAK_FLAG
 #HAL 1.0 source
@@ -50,7 +60,7 @@ LOCAL_SRC_FILES += \
         HAL/QCameraPostProc.cpp \
         HAL/QCamera2HWICallbacks.cpp \
         HAL/QCameraParameters.cpp \
-        HAL/CameraParameters.cpp \
+	HAL/CameraParameters.cpp \
         HAL/QCameraParametersIntf.cpp \
         HAL/QCameraThermalAdapter.cpp \
         util/QCameraFOVControl.cpp \
@@ -83,6 +93,14 @@ endif
 ifeq ($(call is-platform-sdk-version-at-least,26),true)
 USE_DISPLAY_SERVICE := true
 LOCAL_CFLAGS += -DUSE_DISPLAY_SERVICE
+LOCAL_CFLAGS += -std=c++14 -std=gnu++1z
+else
+LOCAL_CFLAGS += -std=c++14 -std=gnu++1z
+endif
+
+#Android P onwards we use vendor prefix
+ifeq ($(call is-platform-sdk-version-at-least,28),true)
+LOCAL_CFLAGS += -DUSE_VENDOR_PROP
 endif
 
 #HAL 1.0 Flags
@@ -97,25 +115,20 @@ LOCAL_C_INCLUDES := \
         $(LOCAL_PATH)/stack/mm-camera-interface/inc \
         $(LOCAL_PATH)/util \
         $(LOCAL_PATH)/HAL3 \
-        hardware/qcom-caf/msm8952/media/libstagefrighthw \
-        hardware/qcom-caf/msm8952/media/mm-core/inc
+        $(call project-path-for,qcom-media)/libstagefrighthw \
+        $(call project-path-for,qcom-media)/mm-core/inc \
+        $(TARGET_OUT_HEADERS)/mm-camera-lib/cp/prebuilt
 
-ifneq (,$(filter $(strip $(SOMC_KERNEL_VERSION)),4.9 4.14))
-LOCAL_C_INCLUDES += \
-        system/core/libion/kernel-headers \
-        system/core/libion/include
-endif
-
-LOCAL_HEADER_LIBRARIES := camera_common_headers
 LOCAL_HEADER_LIBRARIES := media_plugin_headers
 LOCAL_HEADER_LIBRARIES += libandroid_sensor_headers
 LOCAL_HEADER_LIBRARIES += libcutils_headers
 LOCAL_HEADER_LIBRARIES += libsystem_headers
 LOCAL_HEADER_LIBRARIES += libhardware_headers
+LOCAL_HEADER_LIBRARIES += camera_common_headers
+LOCAL_HEADER_LIBRARIES += display_headers
 
 #HAL 1.0 Include paths
-LOCAL_C_INCLUDES += \
-        $(LOCAL_PATH)/HAL
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/HAL
 
 ifeq ($(TARGET_COMPILE_WITH_MSM_KERNEL),true)
 LOCAL_HEADER_LIBRARIES += generated_kernel_headers
@@ -132,29 +145,40 @@ ifneq (,$(filter msm8996 sdm660 msm8998 apq8098_latv,$(TARGET_BOARD_PLATFORM)))
     LOCAL_CFLAGS += -DUBWC_PRESENT
 endif
 
-LOCAL_CFLAGS += -DTARGET_MSM8996
+ifneq (,$(filter msm8996,$(TARGET_BOARD_PLATFORM)))
+    LOCAL_CFLAGS += -DTARGET_MSM8996
+endif
 
 LOCAL_CFLAGS += -DUSE_CAMERA_METABUFFER_UTILS
 
 #LOCAL_STATIC_LIBRARIES := libqcamera2_util
 LOCAL_C_INCLUDES += \
-        $(TARGET_OUT_HEADERS)/qcom/display
-LOCAL_C_INCLUDES += \
-        hardware/qcom-caf/msm8952/display/libqservice
+        $(call project-path-for,qcom-display)/libqservice
 LOCAL_SHARED_LIBRARIES := liblog libhardware libutils libcutils libdl libsync
 LOCAL_SHARED_LIBRARIES += libmmcamera_interface libmmjpeg_interface libui libcamera_metadata
 LOCAL_SHARED_LIBRARIES += libqdMetaData libqservice libbinder
 LOCAL_SHARED_LIBRARIES += libbase libcutils libdl libhal_dbg
-ifneq (,$(filter $(strip $(SOMC_KERNEL_VERSION)),4.9 4.14))
-LOCAL_SHARED_LIBRARIES += libion
+ifeq ($(IS_QC_BOKEH_SUPPORTED),true)
+LOCAL_SHARED_LIBRARIES += libdualcameraddm
+LOCAL_CFLAGS += -DENABLE_QC_BOKEH
 endif
 ifeq ($(USE_DISPLAY_SERVICE),true)
-LOCAL_SHARED_LIBRARIES += android.frameworks.displayservice@1.0 libhidlbase
+LOCAL_SHARED_LIBRARIES += android.frameworks.displayservice@1.0 android.hidl.base@1.0 libhidlbase
+  ifneq ($(filter P% p% Q% q%,$(TARGET_PLATFORM_VERSION)),)
+    LOCAL_SHARED_LIBRARIES += libhidltransport
+  endif
 else
 LOCAL_SHARED_LIBRARIES += libgui
 endif
 ifeq ($(TARGET_TS_MAKEUP),true)
 LOCAL_SHARED_LIBRARIES += libts_face_beautify_hal libts_detected_face_hal
+endif
+ifeq ($(TARGET_HAS_LOW_RAM), true)
+LOCAL_CFLAGS += -DHAS_LOW_RAM
+endif
+
+ifneq (,$(filter msm8952 msm8937_32go-userdebug, $(TARGET_BOARD_PLATFORM)))
+LOCAL_CFLAGS += -DSUPPORT_ONLY_HAL3
 endif
 
 ifeq ($(TARGET_USES_CASH_EXTENSION), true)

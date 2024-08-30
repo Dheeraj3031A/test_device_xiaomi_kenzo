@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -31,8 +31,8 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <sys/ioctl.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
 #define MMAN_H <SYSTEM_HEADER_PREFIX/mman.h>
 #include MMAN_H
 #include <cutils/properties.h>

@@ -40,6 +40,7 @@
 // Camera dependencies
 #include "QCameraPerf.h"
 #include "QCameraTrace.h"
+#include "QCameraCommon.h"
 
 #include <android-base/properties.h>
 
@@ -73,13 +74,15 @@ typedef enum {
     MPCTLV3_MAX_ONLINE_CPU_CLUSTER_BIG      = 0x41004000,
     MPCTLV3_MAX_ONLINE_CPU_CLUSTER_LITTLE   = 0x41004100,
 
-    MPCTLV3_ALL_CPUS_PWR_CLPS_DIS           = 0x40400000,
-    MPCTLV3_CPUBW_HWMON_MIN_FREQ            = 0x41800000,
-    MPCTLV3_CPUBW_HWMON_HYST_OPT            = 0x4180C000
+    MPCTLV3_ALL_CPUS_PWR_CLPS_DIS           = 0x40400000
 } perf_lock_params;
 
-
 static int32_t perfLockParamsOpenCamera[] = {
+    #ifndef TARGET_MSM8996
+    // Make sure big cluster is online
+    MPCTLV3_MIN_ONLINE_CPU_CLUSTER_BIG,     0x4,
+    MPCTLV3_MAX_ONLINE_CPU_CLUSTER_BIG,     0x4,
+    #endif
     // Disable power collapse and set CPU cloks to turbo
     MPCTLV3_ALL_CPUS_PWR_CLPS_DIS,          0x1,
     MPCTLV3_MAX_FREQ_CLUSTER_BIG_CORE_0,    0xFFF,
@@ -89,6 +92,11 @@ static int32_t perfLockParamsOpenCamera[] = {
 };
 
 static int32_t perfLockParamsCloseCamera[] = {
+    #ifndef TARGET_MSM8996
+    // Make sure big cluster is online
+    MPCTLV3_MIN_ONLINE_CPU_CLUSTER_BIG,     0x4,
+    MPCTLV3_MAX_ONLINE_CPU_CLUSTER_BIG,     0x4,
+    #endif
     // Disable power collapse and set CPU cloks to turbo
     MPCTLV3_ALL_CPUS_PWR_CLPS_DIS,          0x1,
     MPCTLV3_MAX_FREQ_CLUSTER_BIG_CORE_0,    0xFFF,
@@ -98,6 +106,11 @@ static int32_t perfLockParamsCloseCamera[] = {
 };
 
 static int32_t perfLockParamsStartPreview[] = {
+    #ifndef TARGET_MSM8996
+    // Make sure big cluster is online
+    MPCTLV3_MIN_ONLINE_CPU_CLUSTER_BIG,     0x4,
+    MPCTLV3_MAX_ONLINE_CPU_CLUSTER_BIG,     0x4,
+    #endif
     // Disable power collapse and set CPU cloks to turbo
     MPCTLV3_ALL_CPUS_PWR_CLPS_DIS,          0x1,
     MPCTLV3_MAX_FREQ_CLUSTER_BIG_CORE_0,    0xFFF,
@@ -107,14 +120,92 @@ static int32_t perfLockParamsStartPreview[] = {
 };
 
 static int32_t perfLockParamsTakeSnapshot[] = {
-    // Disable power collapse and set CPU cloks to turbo
+    // Disable power collapse
     MPCTLV3_ALL_CPUS_PWR_CLPS_DIS,          0x1,
-    MPCTLV3_MAX_FREQ_CLUSTER_BIG_CORE_0,    0xFFF,
-    MPCTLV3_MIN_FREQ_CLUSTER_BIG_CORE_0,    0xFFF,
-    MPCTLV3_MAX_FREQ_CLUSTER_LITTLE_CORE_0, 0xFFF,
+    #ifdef TARGET_MSM8996
+    // Set little cluster and big cluster cores to 1.555 GHz
+    MPCTLV3_MIN_FREQ_CLUSTER_LITTLE_CORE_0, 0x613,
+    MPCTLV3_MIN_FREQ_CLUSTER_LITTLE_CORE_1, 0x613,
+    MPCTLV3_MAX_FREQ_CLUSTER_LITTLE_CORE_0, 0x613,
+    MPCTLV3_MAX_FREQ_CLUSTER_LITTLE_CORE_1, 0x613,
+    MPCTLV3_MIN_FREQ_CLUSTER_BIG_CORE_0,    0x613,
+    MPCTLV3_MIN_FREQ_CLUSTER_BIG_CORE_1,    0x613,
+    MPCTLV3_MAX_FREQ_CLUSTER_BIG_CORE_0,    0x613,
+    MPCTLV3_MAX_FREQ_CLUSTER_BIG_CORE_1,    0x613
+    #else
+    // Set little cluster cores to 1.555 GHz
+    MPCTLV3_MIN_FREQ_CLUSTER_LITTLE_CORE_0, 0x613,
+    MPCTLV3_MIN_FREQ_CLUSTER_LITTLE_CORE_1, 0x613,
+    MPCTLV3_MIN_FREQ_CLUSTER_LITTLE_CORE_2, 0x613,
+    MPCTLV3_MIN_FREQ_CLUSTER_LITTLE_CORE_3, 0x613,
+    MPCTLV3_MAX_FREQ_CLUSTER_LITTLE_CORE_0, 0x613,
+    MPCTLV3_MAX_FREQ_CLUSTER_LITTLE_CORE_1, 0x613,
+    MPCTLV3_MAX_FREQ_CLUSTER_LITTLE_CORE_2, 0x613,
+    MPCTLV3_MAX_FREQ_CLUSTER_LITTLE_CORE_3, 0x613,
+    // Set big cluster offline
+    MPCTLV3_MAX_ONLINE_CPU_CLUSTER_BIG,     0x0
+    #endif
+};
+
+static int32_t perfLockParamsTakeSnapshotSDM429[] = {
+    // Disable power collapse
+    MPCTLV3_ALL_CPUS_PWR_CLPS_DIS,          0x1,
+    // Set little cluster cores to 1.555 GHz
+    MPCTLV3_MIN_FREQ_CLUSTER_LITTLE_CORE_0, 0x613,
+    MPCTLV3_MIN_FREQ_CLUSTER_LITTLE_CORE_1, 0x613,
+    MPCTLV3_MIN_FREQ_CLUSTER_LITTLE_CORE_2, 0x613,
+    MPCTLV3_MIN_FREQ_CLUSTER_LITTLE_CORE_3, 0x613,
+    MPCTLV3_MAX_FREQ_CLUSTER_LITTLE_CORE_0, 0x613,
+    MPCTLV3_MAX_FREQ_CLUSTER_LITTLE_CORE_1, 0x613,
+    MPCTLV3_MAX_FREQ_CLUSTER_LITTLE_CORE_2, 0x613,
+    MPCTLV3_MAX_FREQ_CLUSTER_LITTLE_CORE_3, 0x613,
+    // Set big cluster offline
+    MPCTLV3_MAX_ONLINE_CPU_CLUSTER_BIG,     0x4
+};
+
+static int32_t perfLockParamsTakeSnapshotQM215[] = {
+    // Disable power collapse
+    MPCTLV3_ALL_CPUS_PWR_CLPS_DIS,          0x1,
+    MPCTLV3_MIN_FREQ_CLUSTER_BIG_CORE_0,    0x613,
+    MPCTLV3_MIN_ONLINE_CPU_CLUSTER_BIG,     0x4
+};
+
+static int32_t perfLockParamsTakeSnapshotQM2150[] = {
+    // Disable power collapse
+    MPCTLV3_ALL_CPUS_PWR_CLPS_DIS,          0x1,
+    MPCTLV3_MIN_FREQ_CLUSTER_BIG_CORE_0,    0x613,
+    MPCTLV3_MIN_ONLINE_CPU_CLUSTER_BIG,     0x4
+};
+
+static int32_t perfLockParamsBokehSnapshot[] = {
+    #ifndef TARGET_MSM8996
+    // Make sure big cluster is online
+    MPCTLV3_MIN_ONLINE_CPU_CLUSTER_BIG,     0x4,
+    MPCTLV3_MAX_ONLINE_CPU_CLUSTER_BIG,     0x4,
+    #endif
+
+    // Disable power collapse
+    MPCTLV3_ALL_CPUS_PWR_CLPS_DIS,          0x1,
+    // Set little cluster cores to turbo
     MPCTLV3_MIN_FREQ_CLUSTER_LITTLE_CORE_0, 0xFFF,
-    MPCTLV3_CPUBW_HWMON_HYST_OPT,           0x0,
-    MPCTLV3_CPUBW_HWMON_MIN_FREQ,           0x8C
+    MPCTLV3_MAX_FREQ_CLUSTER_LITTLE_CORE_0, 0xFFF,
+
+    // Set big cluster cores to turbo
+    MPCTLV3_MIN_FREQ_CLUSTER_BIG_CORE_0, 0xFFF,
+    MPCTLV3_MAX_FREQ_CLUSTER_BIG_CORE_0, 0xFFF
+};
+
+
+static int32_t perfLockParamsTakeSnapshotsdm630[] = {
+    MPCTLV3_MIN_FREQ_CLUSTER_BIG_CORE_0, 0x613,
+    MPCTLV3_MIN_FREQ_CLUSTER_BIG_CORE_1, 0x613,
+    MPCTLV3_MIN_FREQ_CLUSTER_BIG_CORE_2, 0x613,
+    MPCTLV3_MIN_FREQ_CLUSTER_BIG_CORE_3, 0x613,
+    MPCTLV3_MAX_FREQ_CLUSTER_BIG_CORE_0, 0x613,
+    MPCTLV3_MAX_FREQ_CLUSTER_BIG_CORE_1, 0x613,
+    MPCTLV3_MAX_FREQ_CLUSTER_BIG_CORE_2, 0x613,
+    MPCTLV3_MAX_FREQ_CLUSTER_BIG_CORE_3, 0x613,
+    MPCTLV3_MAX_ONLINE_CPU_CLUSTER_LITTLE,     0x0
 };
 
 PerfLockInfo QCameraPerfLock::mPerfLockInfo[] = {
@@ -133,7 +224,10 @@ PerfLockInfo QCameraPerfLock::mPerfLockInfo[] = {
     { //PERF_LOCK_POWERHINT_PREVIEW
       NULL, 0},
     { //PERF_LOCK_POWERHINT_ENCODE
-      NULL, 0}
+      NULL, 0},
+    { //PERF_LOCK_BOKEH_SNAPSHOT
+      perfLockParamsBokehSnapshot,
+      sizeof(perfLockParamsBokehSnapshot)/sizeof(int32_t) },
     };
 
 Mutex                QCameraPerfLockIntf::mMutex;
@@ -312,6 +406,30 @@ QCameraPerfLock* QCameraPerfLock::create(
         QCameraPerfLockIntf *perfLockIntf = QCameraPerfLockIntf::createSingleton();
         if (perfLockIntf) {
             perfLock = new QCameraPerfLock(perfLockType, perfLockIntf);
+            if ((perfLockType == PERF_LOCK_TAKE_SNAPSHOT) && (QCameraCommon::is_target_SDM630())) {
+                memcpy (perfLockParamsTakeSnapshot,perfLockParamsTakeSnapshotsdm630,
+                        sizeof(perfLockParamsTakeSnapshotsdm630));
+                mPerfLockInfo[perfLockType].perfLockParamsCount =
+                sizeof(perfLockParamsTakeSnapshotsdm630)/sizeof(int32_t);
+            } else if((perfLockType == PERF_LOCK_TAKE_SNAPSHOT) &&
+                       (QCameraCommon::is_target_QM215())) {
+                memcpy (perfLockParamsTakeSnapshot,perfLockParamsTakeSnapshotQM215,
+                        sizeof(perfLockParamsTakeSnapshotQM215));
+                mPerfLockInfo[perfLockType].perfLockParamsCount =
+                sizeof(perfLockParamsTakeSnapshotQM215)/sizeof(int32_t);
+            } else if((perfLockType == PERF_LOCK_TAKE_SNAPSHOT) &&
+                       (QCameraCommon::is_target_QM2150())) {
+                memcpy (perfLockParamsTakeSnapshot,perfLockParamsTakeSnapshotQM2150,
+                        sizeof(perfLockParamsTakeSnapshotQM2150));
+                mPerfLockInfo[perfLockType].perfLockParamsCount =
+                sizeof(perfLockParamsTakeSnapshotQM2150)/sizeof(int32_t);
+           } else if ((perfLockType == PERF_LOCK_TAKE_SNAPSHOT) &&
+                       (QCameraCommon::is_target_SDM429())) {
+                memcpy (perfLockParamsTakeSnapshot,perfLockParamsTakeSnapshotSDM429,
+                        sizeof(perfLockParamsTakeSnapshotSDM429));
+                mPerfLockInfo[perfLockType].perfLockParamsCount =
+                sizeof(perfLockParamsTakeSnapshotSDM429)/sizeof(int32_t);
+           }
         }
     }
     return perfLock;
@@ -458,6 +576,7 @@ bool QCameraPerfLock::acquirePerfLock(
 }
 
 
+
 /*===========================================================================
  * FUNCTION   : releasePerfLock
  *
@@ -559,7 +678,7 @@ QCameraPerfLockIntf* QCameraPerfLockIntf::createSingleton()
         uint32_t perfLockEnable = 0;
         char value[PROPERTY_VALUE_MAX];
 
-        property_get("persist.camera.perflock.enable", value, "1");
+        property_get("persist.vendor.camera.perflock.enable", value, "1");
         perfLockEnable = atoi(value);
 
         if (perfLockEnable) {

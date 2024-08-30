@@ -18,9 +18,8 @@ LOCAL_HEADER_LIBRARIES := generated_kernel_headers
 LOCAL_C_INCLUDES += \
     $(LOCAL_PATH)/../ \
     $(LOCAL_PATH)/../../stack/mm-camera-interface/inc \
-    hardware/libhardware/include/hardware \
-    hardware/qcom-caf/msm8952/media/libstagefrighthw \
-    hardware/qcom-caf/msm8952/media/mm-core/inc
+    $(call project-path-for,qcom-media)/libstagefrighthw \
+    $(call project-path-for,qcom-media)/mm-core/inc
 
 LOCAL_HEADER_LIBRARIES += libhardware_headers
 LOCAL_HEADER_LIBRARIES += libbinder_headers
@@ -35,10 +34,8 @@ LOCAL_SRC_FILES := \
     QCameraHAL3RawSnapshotTest.cpp \
     QCameraHAL3Test.cpp
 
+
 LOCAL_SHARED_LIBRARIES:= libutils liblog libcamera_metadata libcutils
-ifneq (,$(filter $(strip $(SOMC_KERNEL_VERSION)),4.9 4.14))
-LOCAL_SHARED_LIBRARIES += libion
-endif
 
 LOCAL_STATIC_LIBRARIES := android.hardware.camera.common@1.0-helper
 
@@ -50,6 +47,6 @@ include $(SDCLANG_COMMON_DEFS)
 
 LOCAL_CFLAGS += -Wall -Wextra -Werror
 
-LOCAL_CFLAGS += -std=c++11 -std=gnu++0x
+LOCAL_CFLAGS += -std=c++14 -std=gnu++1z
 
 include $(BUILD_EXECUTABLE)

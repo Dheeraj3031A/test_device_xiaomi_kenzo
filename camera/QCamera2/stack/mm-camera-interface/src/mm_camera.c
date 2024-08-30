@@ -35,9 +35,8 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
-#include <sys/stat.h>
-#include <sys/types.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #include <dlfcn.h>
 #define IOCTL_H <SYSTEM_HEADER_PREFIX/ioctl.h>
 #include IOCTL_H
@@ -2538,7 +2537,7 @@ pthread_mutex_t dbg_log_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static int         cam_soft_assert     = 0;
 static FILE       *cam_log_fd          = NULL;
-static const char *cam_log_filename    = "/data/vendor/camera/cam_dbg_log_hal.txt";
+static const char *cam_log_filename    = QCAMERA_DUMP_FRM_LOCATION"cam_dbg_log_hal.txt";
 
 #undef LOG_TAG
 #define LOG_TAG "QCamera"
@@ -2791,7 +2790,6 @@ void mm_camera_set_dbg_log_properties(void) {
           ALOGD("Debug log file %s open\n", new_log_file_name);
         }
       } else {
-        property_set("persist.vendor.camera.debug.logfile", "0");
         ALOGD("Debug log file is not enabled");
         return;
       }
@@ -2805,11 +2803,9 @@ void mm_camera_set_dbg_log_properties(void) {
    *  Return: N/A
    **/
   void mm_camera_debug_close(void) {
-
     if (cam_log_fd != NULL) {
       fclose(cam_log_fd);
       cam_log_fd = NULL;
     }
-
   }
 #endif

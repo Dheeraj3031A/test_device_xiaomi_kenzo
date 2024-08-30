@@ -131,7 +131,7 @@ typedef struct {
     cam_sync_mechanism_t sync_mechanism;
     cam_sync_type_t type;
     cam_sync_mode_t mode;
-    cam_3a_sync_mode_t sync_3a_mode;
+    cam_3a_sync_config_t sync_3a_config;
     cam_dual_camera_role_t cam_role;
     /* session Id of the other camera session
        Linking will be done with this session in the
@@ -139,6 +139,7 @@ typedef struct {
     uint32_t related_sensor_session_id;
     /*Low power mode type. Static info per device*/
     cam_dual_camera_perf_mode_t perf_mode;
+    uint8_t hal_lpm_control;
 } cam_dual_camera_bundle_info_t;
 typedef cam_dual_camera_bundle_info_t cam_sync_related_sensors_event_info_t;
 
@@ -847,8 +848,8 @@ typedef struct cam_stream_info {
     ((NULL != TABLE_PTR) ? \
     ((TABLE_PTR->data.member_variable_##META_ID[ 0 ] = DATA), \
     (TABLE_PTR->is_valid[META_ID] = 1), (0)) : \
-    (({LOGE("Unable to set metadata TABLE_PTR:%p META_ID:%d", \
-            TABLE_PTR, META_ID)}), (-1))) \
+    ((LOGE("Unable to set metadata TABLE_PTR:%p META_ID:%d", \
+            TABLE_PTR, META_ID)), (-1))) \
 
 #define ADD_SET_PARAM_ENTRY_TO_BATCH_FOR_AUX(TABLE_PTR, AUX_TABLE_PTR, META_ID) \
     ((NULL != TABLE_PTR || (NULL != AUX_TABLE_PTR)) ? \
@@ -1170,8 +1171,6 @@ typedef struct {
     INCLUDE(CAM_INTF_PARM_HAL_BRACKETING_HDR,           cam_hdr_param_t,             1);
     INCLUDE(CAM_INTF_META_DC_LOW_POWER_ENABLE,          uint8_t,                     1);
     INCLUDE(CAM_INTF_META_DC_SAC_OUTPUT_INFO,           cam_sac_output_info_t,       1);
-    INCLUDE(CAM_INTF_META_HYBRID_AE,                    uint8_t,                     1);
-    INCLUDE(CAM_INTF_META_AF_SCENE_CHANGE,              uint8_t,                     1);
     INCLUDE(CAM_INTF_META_DC_IN_SNAPSHOT_PP_ZOOM_RANGE, uint8_t,                     1);
     INCLUDE(CAM_INTF_META_DC_BOKEH_MODE,                uint8_t,                     1);
     INCLUDE(CAM_INTF_PARM_FOV_COMP_ENABLE,              int32_t,                     1);
@@ -1186,6 +1185,7 @@ typedef struct {
     INCLUDE(CAM_INTF_PARAM_BOKEH_BLUR_LEVEL,            cam_rtb_blur_info_t,         1);
     INCLUDE(CAM_INTF_META_RTB_DATA,                     cam_rtb_msg_type_t,          1);
     INCLUDE(CAM_INTF_META_DC_CAPTURE,                   uint8_t,                     1);
+    INCLUDE(CAM_INTF_PARM_BOKEH_MODE,                   uint8_t,                     1);
 } metadata_data_t;
 
 /* Update clear_metadata_buffer() function when a new is_xxx_valid is added to
