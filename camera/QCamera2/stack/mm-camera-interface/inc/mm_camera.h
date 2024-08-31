@@ -57,7 +57,7 @@
 /* Future frame idx, large enough to make sure capture
 * settings can be applied and small enough to still capture an image */
 #define MM_CAMERA_MAX_FUTURE_FRAME_WAIT 100
-#define WAIT_TIMEOUT 5
+#define WAIT_TIMEOUT 10
 
 /*For frame sync */
 #define MAX_OBJS_FOR_FRAME_SYNC   4
@@ -208,6 +208,7 @@ typedef enum {
     MM_STREAM_EVT_REG_BUF,
     MM_STREAM_EVT_UNREG_BUF,
     MM_STREAM_EVT_START,
+    MM_STREAM_EVT_START_SENSOR_STREAMING,
     MM_STREAM_EVT_STOP,
     MM_STREAM_EVT_QBUF,
     MM_STREAM_EVT_SET_PARM,
@@ -350,8 +351,6 @@ typedef struct mm_stream {
     struct mm_stream *aux_str_obj[MM_CAMERA_MAX_AUX_CAMERA];  /*aux stream of this stream*/
     mm_frame_sync_t frame_sync;
     uint8_t is_res_shared;
-    uint8_t is_deferred;
-    uint8_t is_frame_shared;
 } mm_stream_t;
 
 /* mm_channel */
@@ -370,6 +369,7 @@ typedef enum {
     MM_CHANNEL_EVT_CONFIG_STREAM,
     MM_CHANNEL_EVT_GET_BUNDLE_INFO,
     MM_CHANNEL_EVT_START,
+    MM_CHANNEL_EVT_START_SENSOR_STREAMING,
     MM_CHANNEL_EVT_STOP,
     MM_CHANNEL_EVT_PAUSE,
     MM_CHANNEL_EVT_RESUME,
@@ -761,8 +761,10 @@ extern int32_t mm_camera_config_stream(mm_camera_obj_t *my_obj,
                                        mm_camera_stream_config_t *config);
 extern int32_t mm_camera_start_channel(mm_camera_obj_t *my_obj,
                                        uint32_t ch_id);
+extern int32_t mm_camera_start_sensor_stream_on(mm_camera_obj_t *my_obj,
+                                       uint32_t ch_id);
 extern int32_t mm_camera_stop_channel(mm_camera_obj_t *my_obj,
-                                      uint32_t ch_id);
+                                      uint32_t ch_id, bool stop_immediately);
 extern int32_t mm_camera_request_super_buf(mm_camera_obj_t *my_obj,
         uint32_t ch_id, mm_camera_req_buf_t *buf);
 extern int32_t mm_camera_cancel_super_buf_request(mm_camera_obj_t *my_obj,

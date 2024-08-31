@@ -35,10 +35,13 @@
 #include <utils/Condition.h>
 
 // Camera dependencies
-#include "hardware/camera.h"
+#include "camera.h"
 #include "QCameraAllocator.h"
 #include "QCameraChannel.h"
 #include "QCameraCmdThread.h"
+#if 0 // Temporary removing the dependency on libgui
+#include "QCameraDisplay.h"
+#endif
 #include "QCameraMem.h"
 #include "QCameraParameters.h"
 #include "QCameraParametersIntf.h"
@@ -110,19 +113,6 @@ typedef struct {
 
 #define EXIF_ASCII_PREFIX_SIZE           8   //(sizeof(ExifAsciiPrefix))
 
-//Min buffer requirement for B+M Clearsight fusion
-#define MIN_CLEARSIGHT_BUFS 3
-
-#define NUM_BOKEH_OUTPUT 3    //Bokeh image, main image and depth map
-
-/*For noraml recording usecase the number of video buffers
-are 9 and preivew buffers are 5. In the special case
-same buffer will be used for both preview and video, therefore
-keeping the buffer count to 15.*/
-
-#define VIDEO_FB_BUF_COUNT 15 //Number of buffers for video face beautification.
-
-
 typedef enum {
     QCAMERA_NOTIFY_CALLBACK,
     QCAMERA_DATA_CALLBACK,
@@ -135,8 +125,7 @@ typedef enum {
     QCAMERA_METADATA_ASD = 0x001,
     QCAMERA_METADATA_FD,
     QCAMERA_METADATA_HDR,
-    QCAMERA_METADATA_LED_CALIB,
-    QCAMERA_METADATA_RTB
+    QCAMERA_METADATA_LED_CALIB
 } cam_manual_capture_type;
 
 typedef void (*camera_release_callback)(void *user_data,
@@ -209,9 +198,6 @@ private:
     QCameraCmdThread mProcTh;
     bool             mActive;
 };
-
-class QCameraDisplay;
-
 class QCamera2HardwareInterface : public QCameraAllocator,
         public QCameraThermalCallback, public QCameraAdjustFPS
 {
@@ -298,8 +284,7 @@ public:
 
     // Implementation of QCameraAllocator
     virtual QCameraMemory *allocateStreamBuf(cam_stream_type_t stream_type,
-            size_t size, int stride, int scanline, uint8_t &bufferCnt,
-            uint32_t cam_type = MM_CAMERA_TYPE_MAIN);
+            size_t size, int stride, int scanline, uint8_t &bufferCnt);
     virtual int32_t allocateMoreStreamBuf(QCameraMemory *mem_obj,
             size_t size, uint8_t &bufferCnt);
     virtual QCameraHeapMemory *allocateStreamInfoBuf(
@@ -380,8 +365,7 @@ private:
     int processEvt(qcamera_sm_evt_enum_t evt, void *evt_payload);
     int processSyncEvt(qcamera_sm_evt_enum_t evt, void *evt_payload);
     void lockAPI();
-    void waitAPIResult(qcamera_sm_evt_enum_t api_evt,
-            qcamera_api_result_t *apiResult, int timeoutSec = -1);
+    void waitAPIResult(qcamera_sm_evt_enum_t api_evt, qcamera_api_result_t *apiResult);
     void unlockAPI();
     void signalAPIResult(qcamera_api_result_t *result);
     void signalEvtResult(qcamera_api_result_t *result);
@@ -432,7 +416,6 @@ private:
     int32_t processJpegNotify(qcamera_jpeg_evt_payload_t *jpeg_job);
     int32_t processHDRData(cam_asd_hdr_scene_data_t hdr_scene);
     int32_t processLEDCalibration(int32_t value);
-    int32_t processRTBData(cam_rtb_msg_type_t rtbData);
     int32_t processRetroAECUnlock();
     int32_t processZSLCaptureDone();
     int32_t processSceneData(cam_scene_mode_type scene);
@@ -491,8 +474,7 @@ private:
     int32_t prepareHardwareForSnapshot(int32_t afNeeded);
     bool needProcessPreviewFrame(uint32_t frameID);
     bool needSendPreviewCallback();
-    bool isNoDisplayMode(uint32_t cam_type) {
-        return mParameters.isNoDisplayMode(cam_type); };
+    bool isNoDisplayMode() {return mParameters.isNoDisplayMode();};
     bool isZSLMode() {return mParameters.isZSLMode();};
     bool isRdiMode() {return mParameters.isRdiMode();};
     uint8_t numOfSnapshotsExpected() {
@@ -504,8 +486,7 @@ private:
     void setRetroPicture(bool enable) { bRetroPicture = enable; };
     bool isRetroPicture() {return bRetroPicture; };
     bool isHDRMode() {return mParameters.isHDREnabled();};
-    uint8_t getBufNumRequired(cam_stream_type_t stream_type,
-            uint32_t cam_type = CAM_TYPE_MAIN);
+    uint8_t getBufNumRequired(cam_stream_type_t stream_type);
     uint8_t getBufNumForAux(cam_stream_type_t stream_type);
     bool needFDMetadata(qcamera_ch_type_enum_t channel_type);
     int32_t getPaddingInfo(cam_stream_type_t streamType,
@@ -620,14 +601,9 @@ private:
             uint32_t cam_type = MM_CAMERA_TYPE_MAIN);
     uint32_t getCamHandleForChannel(qcamera_ch_type_enum_t ch_type);
     int32_t switchCameraCb(uint32_t camMaster);
-    void forceCameraWakeup();
-    int32_t processCameraControl(uint32_t camState, bool bundledSnapshot,
-            cam_fallback_mode_t fallbackMode);
+    int32_t processCameraControl(uint32_t camState, bool bundledSnapshot);
     bool needSyncCB(cam_stream_type_t stream_type);
     uint32_t getSnapshotHandle();
-    void initDCSettings();
-    void updateDCSettings();
-    void configureSnapshotSkip(bool skip);
 private:
     camera_device_t   mCameraDevice;
     uint32_t          mCameraId;
@@ -635,7 +611,6 @@ private:
     uint32_t mActiveCameras;
     uint32_t mMasterCamera;
     bool mBundledSnapshot;
-    cam_fallback_mode_t mFallbackMode;
     bool mCameraOpened;
     bool mDualCamera;
     QCameraFOVControl *m_pFovControl;
@@ -676,11 +651,7 @@ private:
     QCameraChannel *m_channels[QCAMERA_CH_TYPE_MAX]; // array holding channel ptr
 
     bool m_bPreviewStarted;             //flag indicates first preview frame callback is received
-    bool m_bFirstPreviewFrameReceived;
     bool m_bRecordStarted;             //flag indicates Recording is started for first time
-    bool m_bPreparingHardware;         //flag indicates take picture initiated
-    bool m_bNeedVideoCb;               //flag indicates video face beautifications is enabled
-    QCameraVideoMemory *videoMemFb;
 
     // Signifies if ZSL Retro Snapshots are enabled
     bool bRetroPicture;
@@ -832,7 +803,7 @@ private:
 #endif
     QCameraMemory *mMetadataMem;
 
-    uint32_t mNextJobId;
+    static uint32_t sNextJobId;
 
     //Gralloc memory details
     pthread_mutex_t mGrallocLock;
@@ -845,8 +816,9 @@ private:
     uint32_t mSurfaceStridePadding;
 
     //QCamera Display Object
-    QCameraDisplay* mCameraDisplay;
-
+#if 0 // Temporary removing the dependency on libgui
+    QCameraDisplay mCameraDisplay;
+#endif
     bool m_bNeedRestart;
     Mutex mMapLock;
     Condition mMapCond;

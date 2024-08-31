@@ -48,11 +48,10 @@ namespace qcamera {
  *
  * RETURN     : None
  *==========================================================================*/
-QCamera3StreamMem::QCamera3StreamMem(uint32_t maxHeapBuffer, bool queueHeapBuffers) :
+QCamera3StreamMem::QCamera3StreamMem(uint32_t maxHeapBuffer) :
         mHeapMem(maxHeapBuffer),
         mGrallocMem(maxHeapBuffer),
-        mMaxHeapBuffers(maxHeapBuffer),
-        mQueueHeapBuffers(queueHeapBuffers)
+        mMaxHeapBuffers(maxHeapBuffer)
 {
 }
 
@@ -100,9 +99,14 @@ uint32_t QCamera3StreamMem::getCnt()
  *==========================================================================*/
 int QCamera3StreamMem::getRegFlags(uint8_t * regFlags)
 {
-    // Assume that all buffers allocated can be queued.
-    for (uint32_t i = 0; i < mHeapMem.getCnt(); i ++)
-        regFlags[i] = (mQueueHeapBuffers ? 1 : 0);
+    // Queue all Heap buffers that are allocated.
+    for (uint32_t i = 0; i < mHeapMem.getCnt(); i ++) {
+        regFlags[i] = 1;
+    }
+    // Queue all gralloc buffers that are registered.
+    for (uint32_t i = 0; i < mGrallocMem.getCnt(); i++) {
+        regFlags[mMaxHeapBuffers+i] = 1;
+    }
     return NO_ERROR;
 }
 
@@ -222,20 +226,21 @@ int QCamera3StreamMem::cleanCache(uint32_t index)
  *   @offset  : [input] frame buffer offset
  *   @bufDef  : [output] reference to struct to store buffer definition
  *   @index   : [input] index of the buffer
+ *   @virtualAddr : [input] whether to fill out virtual address
  *
  * RETURN     : int32_t type of status
  *              NO_ERROR  -- success
  *              none-zero failure code
  *==========================================================================*/
 int32_t QCamera3StreamMem::getBufDef(const cam_frame_len_offset_t &offset,
-        mm_camera_buf_def_t &bufDef, uint32_t index)
+        mm_camera_buf_def_t &bufDef, uint32_t index, bool virtualAddr)
 {
     int32_t ret = NO_ERROR;
 
     if (index < mMaxHeapBuffers)
-        ret = mHeapMem.getBufDef(offset, bufDef, index);
+        ret = mHeapMem.getBufDef(offset, bufDef, index, virtualAddr);
     else
-        ret = mGrallocMem.getBufDef(offset, bufDef, index);
+        ret = mGrallocMem.getBufDef(offset, bufDef, index, virtualAddr);
 
     bufDef.mem_info = (void *)this;
 
@@ -390,10 +395,10 @@ int QCamera3StreamMem::allocateAll(size_t size)
     return mHeapMem.allocate(size);
 }
 
-int QCamera3StreamMem::allocateOne(size_t size)
+int QCamera3StreamMem::allocateOne(size_t size, bool isCached)
 {
     Mutex::Autolock lock(mLock);
-    return mHeapMem.allocateOne(size);
+    return mHeapMem.allocateOne(size, isCached);
 }
 
 /*===========================================================================
@@ -562,9 +567,105 @@ int32_t QCamera3StreamMem::getBufferIndex(uint32_t frameNumber)
         return index;
 }
 
-void QCamera3StreamMem::switchMaster(uint32_t masterCam)
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// NativeBufferInterface::NativeBufferInterface
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+NativeBufferInterface::NativeBufferInterface()
 {
-    mGrallocMem.switchMaster(masterCam);
+    hw_module_t*              pHwModule;
+    hw_get_module(GRALLOC_HARDWARE_MODULE_ID, const_cast<const hw_module_t**>(&pHwModule));
+    gralloc1_open(pHwModule, &m_pGralloc1Device);
+
+    if (NULL != m_pGralloc1Device)    {
+        m_grallocInterface.CreateDescriptor  = reinterpret_cast<GRALLOC1_PFN_CREATE_DESCRIPTOR>(
+                                                 m_pGralloc1Device->getFunction(m_pGralloc1Device,
+                                                                                GRALLOC1_FUNCTION_CREATE_DESCRIPTOR));
+        m_grallocInterface.DestroyDescriptor = reinterpret_cast<GRALLOC1_PFN_DESTROY_DESCRIPTOR>(
+                                                 m_pGralloc1Device->getFunction(m_pGralloc1Device,
+                                                                                GRALLOC1_FUNCTION_DESTROY_DESCRIPTOR));
+        m_grallocInterface.SetDimensions     = reinterpret_cast<GRALLOC1_PFN_SET_DIMENSIONS>(
+                                                 m_pGralloc1Device->getFunction(m_pGralloc1Device,
+                                                                                GRALLOC1_FUNCTION_SET_DIMENSIONS));
+        m_grallocInterface.SetFormat         = reinterpret_cast<GRALLOC1_PFN_SET_FORMAT>(
+                                                 m_pGralloc1Device->getFunction(m_pGralloc1Device,
+                                                                                GRALLOC1_FUNCTION_SET_FORMAT));
+        m_grallocInterface.SetLayerCount         = reinterpret_cast<GRALLOC1_PFN_SET_LAYER_COUNT>(
+                                                 m_pGralloc1Device->getFunction(m_pGralloc1Device,
+                                                                                GRALLOC1_FUNCTION_SET_LAYER_COUNT));
+        m_grallocInterface.SetProducerUsage  = reinterpret_cast<GRALLOC1_PFN_SET_PRODUCER_USAGE>(
+                                                 m_pGralloc1Device->getFunction(m_pGralloc1Device,
+                                                                                GRALLOC1_FUNCTION_SET_PRODUCER_USAGE));
+        m_grallocInterface.SetConsumerUsage  = reinterpret_cast<GRALLOC1_PFN_SET_CONSUMER_USAGE>(
+                                                 m_pGralloc1Device->getFunction(m_pGralloc1Device,
+                                                                                GRALLOC1_FUNCTION_SET_CONSUMER_USAGE));
+        m_grallocInterface.Allocate          = reinterpret_cast<GRALLOC1_PFN_ALLOCATE>(
+                                                 m_pGralloc1Device->getFunction(m_pGralloc1Device,
+                                                                                GRALLOC1_FUNCTION_ALLOCATE));
+        m_grallocInterface.GetStride         = reinterpret_cast<GRALLOC1_PFN_GET_STRIDE>(
+                                                 m_pGralloc1Device->getFunction(m_pGralloc1Device,
+                                                                                GRALLOC1_FUNCTION_GET_STRIDE));
+        m_grallocInterface.Release           = reinterpret_cast<GRALLOC1_PFN_RELEASE>(
+                                                 m_pGralloc1Device->getFunction(m_pGralloc1Device,
+                                                                                GRALLOC1_FUNCTION_RELEASE));
+        m_grallocInterface.Lock              = reinterpret_cast<GRALLOC1_PFN_LOCK>(
+                                                 m_pGralloc1Device->getFunction(m_pGralloc1Device,
+                                                                                GRALLOC1_FUNCTION_LOCK));
+    }
+    else  {
+        ALOGE("%s:Failed to create gralloc interface.",__FUNCTION__);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// NativeBufferInterface::~NativeBufferInterface
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+NativeBufferInterface::~NativeBufferInterface()
+{
+   if (m_pGralloc1Device != NULL)  {
+        gralloc1_close(m_pGralloc1Device);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/// GetGrallocBufferStride
+///
+/// @brief  Get buffer stride from gralloc interface
+///
+/// @param  handle   Native HAL buffer handle
+///
+/// @return Return the stride size
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+uint32_t NativeBufferInterface::GetGrallocBufferStride(uint32_t width, uint32_t height, uint32_t fmt)
+{
+    uint32_t stride = 0;
+    gralloc1_buffer_descriptor_t desc;
+    buffer_handle_t temp_mem;
+    int32_t res = GRALLOC1_ERROR_NONE;
+
+    if(NULL != m_pGralloc1Device) {
+        if (!(res = m_grallocInterface.CreateDescriptor(m_pGralloc1Device, &desc))) {
+            m_grallocInterface.SetDimensions(m_pGralloc1Device, desc, width, height);
+            m_grallocInterface.SetFormat(m_pGralloc1Device,desc, HAL_PIXEL_FORMAT_RAW10);
+            m_grallocInterface.SetLayerCount(m_pGralloc1Device,desc, 1);
+            if (!(res = m_grallocInterface.Allocate(m_pGralloc1Device, 1, &desc, &temp_mem))) {
+                m_grallocInterface.GetStride(m_pGralloc1Device,
+                                     temp_mem,
+                                     &stride);
+                ALOGV("%s:width=%d, height=%d, fmt=%d, stride=%d.", __FUNCTION__, width, height, fmt, stride);
+                m_grallocInterface.Release(m_pGralloc1Device, temp_mem);
+            }
+            else {
+                stride = 0;
+                ALOGE("%s:Allocate Err=%d",__FUNCTION__, res);
+            }
+            m_grallocInterface.DestroyDescriptor(m_pGralloc1Device, desc);
+        }
+        else {
+            ALOGE("%s:CreateDescriptor Err=%d",__FUNCTION__, res);
+        }
+    }
+
+    return stride;
 }
 
 }; //namespace qcamera

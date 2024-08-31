@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2016, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -38,8 +38,8 @@
 #include <linux/media.h>
 #include <media/msm_cam_sensor.h>
 #include <dlfcn.h>
-#include "fdleak.h"
-#include "memleak.h"
+#include <unistd.h>
+
 #define IOCTL_H <SYSTEM_HEADER_PREFIX/ioctl.h>
 #include IOCTL_H
 
@@ -54,10 +54,6 @@ static mm_camera_ctrl_t g_cam_ctrl;
 
 static pthread_mutex_t g_handler_lock = PTHREAD_MUTEX_INITIALIZER;
 static uint8_t g_handler_history_count = 0; /* history count for handler */
-
-#ifndef DAEMON_PRESENT
-static bool g_shim_initialized = FALSE; /* Tells mct shim layer initialized or not */
-#endif
 
 // 16th (starting from 0) bit tells its a BACK or FRONT camera
 #define CAM_SENSOR_FACING_MASK       (1U<<16)
@@ -691,7 +687,7 @@ static uint32_t mm_camera_intf_add_channel(uint32_t camera_handle,
     uint32_t handle = get_main_camera_handle(camera_handle);
     uint32_t aux_handle = get_aux_camera_handle(camera_handle);
 
-    LOGD("E camera_handler = 0x%x", camera_handle);
+    LOGD("E camera_handler = %d", camera_handle);
     if (handle) {
         pthread_mutex_lock(&g_intf_lock);
         my_obj = mm_camera_util_get_camera_by_handler(handle);
@@ -722,7 +718,7 @@ static uint32_t mm_camera_intf_add_channel(uint32_t camera_handle,
             pthread_mutex_unlock(&g_intf_lock);
         }
     }
-    LOGH("camera_handle = 0x%x ch_id = 0x%x X", camera_handle, ch_id);
+    LOGH("camera_handle = %u ch_id = %u X", camera_handle, ch_id);
     return ch_id;
 }
 
@@ -749,7 +745,7 @@ static int32_t mm_camera_intf_del_channel(uint32_t camera_handle,
     uint32_t m_chid = get_main_camera_handle(ch_id);
     uint32_t aux_chid = get_aux_camera_handle(ch_id);
 
-    LOGD("E ch_id = 0x%x", ch_id);
+    LOGD("E ch_id = %d", ch_id);
 
     if (aux_chid) {
         pthread_mutex_lock(&g_intf_lock);
@@ -777,7 +773,7 @@ static int32_t mm_camera_intf_del_channel(uint32_t camera_handle,
             pthread_mutex_unlock(&g_intf_lock);
         }
     }
-    LOGH("rc = %d ch_id = 0x%x X", rc, ch_id);
+    LOGH("rc = %d ch_id = %u X", rc, ch_id);
     return rc;
 }
 
@@ -1124,7 +1120,7 @@ static uint32_t mm_camera_intf_add_stream(uint32_t camera_handle,
     uint32_t m_ch_id = get_main_camera_handle(ch_id);
     uint32_t aux_chid = get_aux_camera_handle(ch_id);
 
-    LOGD("E handle = 0x%x ch_id = 0x%x",
+    LOGD("E handle = %d ch_id = %d",
           camera_handle, ch_id);
     if (m_ch_id) {
         pthread_mutex_lock(&g_intf_lock);
@@ -1159,7 +1155,7 @@ static uint32_t mm_camera_intf_add_stream(uint32_t camera_handle,
             pthread_mutex_unlock(&g_intf_lock);
         }
     }
-    LOGH("X ch_id = 0x%x stream_id = 0x%x", ch_id, stream_id);
+    LOGH("X ch_id = %u stream_id = %u", ch_id, stream_id);
     return stream_id;
 }
 
@@ -1187,7 +1183,7 @@ static int32_t mm_camera_intf_del_stream(uint32_t camera_handle,
     uint32_t m_strid = get_main_camera_handle(stream_id);
     uint32_t aux_strid = get_aux_camera_handle(stream_id);
 
-    LOGD("E handle = 0x%x ch_id = 0x%x stream_id = 0x%x",
+    LOGD("E handle = %d ch_id = %d stream_id = %d",
           camera_handle, ch_id, stream_id);
 
     if (aux_strid) {
@@ -1219,7 +1215,7 @@ static int32_t mm_camera_intf_del_stream(uint32_t camera_handle,
             pthread_mutex_unlock(&g_intf_lock);
         }
     }
-    LOGH("X stream_id = 0x%x rc = %d", stream_id, rc);
+    LOGH("X stream_id = %u rc = %d", stream_id, rc);
     return rc;
 }
 
@@ -1293,15 +1289,19 @@ static int32_t mm_camera_intf_config_stream(uint32_t camera_handle,
  * PARAMETERS :
  *   @camera_handle: camera handle
  *   @ch_id        : channel handle
+ *   @start_sensor_streaming: whether to start sensor streaming.
+ *                            If false, start_sensor_streaming() must be
+ *                            called to start sensor streaming.
  *
  * RETURN     : int32_t type of status
  *              0  -- success
  *              -1 -- failure
  *==========================================================================*/
 static int32_t mm_camera_intf_start_channel(uint32_t camera_handle,
-                                            uint32_t ch_id)
+                                            uint32_t ch_id,
+                                            bool start_sensor_streaming)
 {
-    int32_t rc = 0;
+    int32_t rc = -1;
     mm_camera_obj_t * my_obj = NULL;
     uint32_t chid = get_main_camera_handle(ch_id);
     uint32_t aux_chid = get_aux_camera_handle(ch_id);
@@ -1315,6 +1315,10 @@ static int32_t mm_camera_intf_start_channel(uint32_t camera_handle,
             pthread_mutex_lock(&my_obj->cam_lock);
             pthread_mutex_unlock(&g_intf_lock);
             rc = mm_camera_start_channel(my_obj, chid);
+            // Start sensor streaming now if needed.
+            if (rc == 0 && start_sensor_streaming) {
+                rc = mm_camera_start_sensor_stream_on(my_obj, ch_id);
+            }
         } else {
             pthread_mutex_unlock(&g_intf_lock);
         }
@@ -1337,21 +1341,48 @@ static int32_t mm_camera_intf_start_channel(uint32_t camera_handle,
     return rc;
 }
 
+static int32_t mm_camera_intf_start_sensor_streaming(uint32_t camera_handle,
+                                            uint32_t ch_id)
+{
+    int32_t rc = -1;
+    mm_camera_obj_t * my_obj = NULL;
+    uint32_t chid = get_main_camera_handle(ch_id);
+
+    if (chid) {
+        uint32_t handle = get_main_camera_handle(camera_handle);
+        pthread_mutex_lock(&g_intf_lock);
+
+        my_obj = mm_camera_util_get_camera_by_handler(handle);
+        if(my_obj) {
+            pthread_mutex_lock(&my_obj->cam_lock);
+            pthread_mutex_unlock(&g_intf_lock);
+            rc = mm_camera_start_sensor_stream_on(my_obj, ch_id);
+        } else {
+            pthread_mutex_unlock(&g_intf_lock);
+        }
+    }
+
+    LOGH("X ch_id = %u rc = %d", ch_id, rc);
+    return rc;
+}
+
 /*===========================================================================
  * FUNCTION   : mm_camera_intf_stop_channel
  *
  * DESCRIPTION: stop a channel, which will stop all streams in the channel
  *
  * PARAMETERS :
- *   @camera_handle: camera handle
- *   @ch_id        : channel handle
+ *   @camera_handle   : camera handle
+ *   @ch_id           : channel handle
+ *   @stop_immediately: stop immediately without waiting for frame boundary.
  *
  * RETURN     : int32_t type of status
  *              0  -- success
  *              -1 -- failure
  *==========================================================================*/
 static int32_t mm_camera_intf_stop_channel(uint32_t camera_handle,
-                                           uint32_t ch_id)
+                                           uint32_t ch_id,
+                                           bool stop_immediately)
 {
     int32_t rc = -1;
     mm_camera_obj_t * my_obj = NULL;
@@ -1379,7 +1410,7 @@ static int32_t mm_camera_intf_stop_channel(uint32_t camera_handle,
         if(my_obj) {
             pthread_mutex_lock(&my_obj->cam_lock);
             pthread_mutex_unlock(&g_intf_lock);
-            rc = mm_camera_stop_channel(my_obj, chid);
+            rc = mm_camera_stop_channel(my_obj, chid, stop_immediately);
         } else {
             pthread_mutex_unlock(&g_intf_lock);
         }
@@ -1408,7 +1439,7 @@ static int32_t mm_camera_intf_request_super_buf(uint32_t camera_handle,
         uint32_t ch_id, mm_camera_req_buf_t *buf)
 {
     int32_t rc = -1;
-    LOGD("E camera_handler = 0x%x,ch_id = 0x%x",
+    LOGD("E camera_handler = %d,ch_id = %d",
           camera_handle, ch_id);
     mm_camera_obj_t * my_obj = NULL;
     uint32_t chid = get_main_camera_handle(ch_id);
@@ -1450,7 +1481,7 @@ static int32_t mm_camera_intf_request_super_buf(uint32_t camera_handle,
         }
     }
 
-    LOGH("X ch_id = 0x%x rc = %d", ch_id, rc);
+    LOGH("X ch_id = %u rc = %d", ch_id, rc);
     return rc;
 }
 
@@ -1472,7 +1503,7 @@ static int32_t mm_camera_intf_cancel_super_buf_request(uint32_t camera_handle,
                                                        uint32_t ch_id)
 {
     int32_t rc = -1;
-    LOGD("E camera_handler = 0x%x,ch_id = 0x%x",
+    LOGD("E camera_handler = %d,ch_id = %d",
           camera_handle, ch_id);
     mm_camera_obj_t * my_obj = NULL;
     uint32_t chid = get_main_camera_handle(ch_id);
@@ -1513,7 +1544,7 @@ static int32_t mm_camera_intf_cancel_super_buf_request(uint32_t camera_handle,
         }
     }
 
-    LOGH("X ch_id = 0x%x rc = %d", ch_id, rc);
+    LOGH("X ch_id = %u rc = %d", ch_id, rc);
     return rc;
 }
 
@@ -2385,7 +2416,7 @@ void get_sensor_info()
             continue;
         }
 
-        unsigned int num_entities = 0;
+        unsigned int num_entities = 1;
         while (1) {
             struct media_entity_desc entity;
             uint32_t temp;
@@ -2396,16 +2427,15 @@ void get_sensor_info()
             uint8_t is_secure;
 
             memset(&entity, 0, sizeof(entity));
-            entity.id = num_entities | MEDIA_ENT_ID_FLAG_NEXT;
+            entity.id = num_entities++;
             rc = ioctl(dev_fd, MEDIA_IOC_ENUM_ENTITIES, &entity);
             if (rc < 0) {
                 LOGD("Done enumerating media entities\n");
                 rc = 0;
                 break;
             }
-            num_entities = entity.id;
-            if(mm_camera_util_match_subdev_type(entity, MSM_CAMERA_SUBDEV_SENSOR,
-                MEDIA_ENT_T_V4L2_SUBDEV)) {
+            if(entity.type == MEDIA_ENT_T_V4L2_SUBDEV &&
+                entity.group_id == MSM_CAMERA_SUBDEV_SENSOR) {
                 temp = entity.flags >> 8;
                 mount_angle = (temp & 0xFF) * 90;
                 facing = ((entity.flags & CAM_SENSOR_FACING_MASK) ?
@@ -2477,7 +2507,7 @@ void sort_camera_info(int num_cam)
     memset(temp_is_yuv, 0, sizeof(temp_is_yuv));
 
     memset(prop, 0, sizeof(prop));
-    property_get("persist.vendor.camera.expose.aux", prop, "0");
+    property_get("persist.camera.expose.aux", prop, "0");
     expose_aux = atoi(prop);
 
     /* Order of the camera exposed is
@@ -2526,7 +2556,7 @@ void sort_camera_info(int num_cam)
             (g_cam_ctrl.cam_type[i] & CAM_TYPE_AUX)
             && expose_aux) {
             temp_info[idx] = g_cam_ctrl.info[i];
-            temp_type[idx] = CAM_TYPE_AUX;
+            temp_type[idx] = CAM_TYPE_MAIN;
             temp_mode[idx] = g_cam_ctrl.cam_mode[i];
             temp_is_yuv[idx] = g_cam_ctrl.is_yuv[i];
             cam_idx[idx] = idx;
@@ -2543,7 +2573,7 @@ void sort_camera_info(int num_cam)
             (g_cam_ctrl.cam_type[i] & CAM_TYPE_AUX)
             && expose_aux) {
             temp_info[idx] = g_cam_ctrl.info[i];
-            temp_type[idx] = CAM_TYPE_AUX;
+            temp_type[idx] = CAM_TYPE_MAIN;
             temp_mode[idx] = g_cam_ctrl.cam_mode[i];
             temp_is_yuv[idx] = g_cam_ctrl.is_yuv[i];
             cam_idx[idx] = idx;
@@ -2648,6 +2678,7 @@ uint8_t get_num_of_cameras()
 #endif
 
     LOGD("E");
+
     property_get("vold.decrypt", prop, "0");
     int decrypt = atoi(prop);
     if (decrypt == 1)
@@ -2656,20 +2687,14 @@ uint8_t get_num_of_cameras()
 
     memset (&g_cam_ctrl, 0, sizeof (g_cam_ctrl));
 #ifndef DAEMON_PRESENT
-    if (g_shim_initialized == FALSE) {
-        if (mm_camera_load_shim_lib() < 0) {
-            LOGE("Failed to module shim library");
-            return 0;
-        } else {
-            g_shim_initialized = TRUE;
-        }
-    } else {
-        LOGH("module shim layer already intialized");
+    if (mm_camera_load_shim_lib() < 0) {
+        LOGE ("Failed to module shim library");
+        return 0;
     }
 #endif /* DAEMON_PRESENT */
 
     while (1) {
-        uint32_t num_entities = 0;
+        uint32_t num_entities = 1U;
         char dev_name[32];
 
         snprintf(dev_name, sizeof(dev_name), "/dev/media%d", num_media_devices);
@@ -2697,7 +2722,7 @@ uint8_t get_num_of_cameras()
         while (1) {
             struct media_entity_desc entity;
             memset(&entity, 0, sizeof(entity));
-            entity.id = num_entities | MEDIA_ENT_ID_FLAG_NEXT;
+            entity.id = num_entities++;
             LOGD("entity id %d", entity.id);
             rc = ioctl(dev_fd, MEDIA_IOC_ENUM_ENTITIES, &entity);
             if (rc < 0) {
@@ -2705,11 +2730,10 @@ uint8_t get_num_of_cameras()
                 rc = 0;
                 break;
             }
-            num_entities = entity.id;
-            LOGD("entity name %s type %x group id %d",
-                   entity.name, entity.type, entity.group_id);
-            if (mm_camera_util_match_subdev_type(entity, MSM_CAMERA_SUBDEV_SENSOR_INIT,
-                 MEDIA_ENT_T_V4L2_SUBDEV)) {
+            LOGD("entity name %s type %d group id %d",
+                entity.name, entity.type, entity.group_id);
+            if (entity.type == MEDIA_ENT_T_V4L2_SUBDEV &&
+                entity.group_id == MSM_CAMERA_SUBDEV_SENSOR_INIT) {
                 snprintf(subdev_name, sizeof(dev_name), "/dev/%s", entity.name);
                 break;
             }
@@ -2719,7 +2743,6 @@ uint8_t get_num_of_cameras()
     }
 
 #ifdef DAEMON_PRESENT
-    LOGD("subdev_name %s", subdev_name);
     /* Open sensor_init subdev */
     sd_fd = open(subdev_name, O_RDWR);
     if (sd_fd < 0) {
@@ -2737,11 +2760,10 @@ uint8_t get_num_of_cameras()
 
     num_media_devices = 0;
     while (1) {
-        uint32_t num_entities = 0U;
+        uint32_t num_entities = 1U;
         char dev_name[32];
 
         snprintf(dev_name, sizeof(dev_name), "/dev/media%d", num_media_devices);
-        LOGD("media dev name %s", dev_name);
         dev_fd = open(dev_name, O_RDWR | O_NONBLOCK);
         if (dev_fd < 0) {
             LOGD("Done discovering media devices: %s\n", strerror(errno));
@@ -2767,16 +2789,14 @@ uint8_t get_num_of_cameras()
         while (1) {
             struct media_entity_desc entity;
             memset(&entity, 0, sizeof(entity));
-            entity.id = num_entities | MEDIA_ENT_ID_FLAG_NEXT;
+            entity.id = num_entities++;
             rc = ioctl(dev_fd, MEDIA_IOC_ENUM_ENTITIES, &entity);
             if (rc < 0) {
                 LOGD("Done enumerating media entities\n");
                 rc = 0;
                 break;
             }
-            num_entities = entity.id;
-            if(mm_camera_util_match_subdev_type(entity, QCAMERA_VNODE_GROUP_ID,
-                MEDIA_ENT_T_DEVNODE_V4L)) {
+            if(entity.type == MEDIA_ENT_T_DEVNODE_V4L && entity.group_id == QCAMERA_VNODE_GROUP_ID) {
                 strlcpy(g_cam_ctrl.video_dev_name[num_cameras],
                      entity.name, sizeof(entity.name));
                 LOGI("dev_info[id=%d,name='%s']\n",
@@ -2905,8 +2925,8 @@ static int32_t mm_camera_intf_register_stream_buf_cb(uint32_t camera_handle,
     uint32_t strid = get_main_camera_handle(stream_id);
     uint32_t aux_strid = get_aux_camera_handle(stream_id);
 
-    LOGD("E handle = %u ch_id = %u stream_id = %d strid: %d aux_strid: %d",
-          camera_handle, ch_id, stream_id, strid, aux_strid);
+    LOGD("E handle = %u ch_id = %u",
+          camera_handle, ch_id);
 
     if (strid) {
         pthread_mutex_lock(&g_intf_lock);
@@ -3102,6 +3122,7 @@ static mm_camera_ops_t mm_camera_ops = {
     .set_stream_parms = mm_camera_intf_set_stream_parms,
     .get_stream_parms = mm_camera_intf_get_stream_parms,
     .start_channel = mm_camera_intf_start_channel,
+    .start_sensor_streaming = mm_camera_intf_start_sensor_streaming,
     .stop_channel = mm_camera_intf_stop_channel,
     .request_super_buf = mm_camera_intf_request_super_buf,
     .cancel_super_buf_request = mm_camera_intf_cancel_super_buf_request,
@@ -3382,26 +3403,3 @@ int mm_camera_module_event_handler(uint32_t session_id, cam_event_t *event)
    return TRUE;
 }
 
-#ifdef USE_4_9_DEFS
-static int mm_camera_util_match_subdev_49(struct media_entity_desc entity,
-     uint32_t gid, uint32_t type __unused)
-{
-     return (entity.type == gid);
-}
-#else
-static int mm_camera_util_match_subdev(struct media_entity_desc entity,
-     uint32_t gid, uint32_t type)
-{
-     return (entity.type == type && entity.group_id == gid);
-}
-#endif
-
-int mm_camera_util_match_subdev_type(struct media_entity_desc entity,
-     uint32_t gid, uint32_t type)
-{
-     #ifdef USE_4_9_DEFS
-     return mm_camera_util_match_subdev_49(entity, gid, type);
-     #else
-     return mm_camera_util_match_subdev(entity, gid, type);
-     #endif
-}

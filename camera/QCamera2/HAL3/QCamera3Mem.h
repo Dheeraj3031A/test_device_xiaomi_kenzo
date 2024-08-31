@@ -78,12 +78,11 @@ public:
     virtual ~QCamera3Memory();
 
     int32_t getBufDef(const cam_frame_len_offset_t &offset,
-            mm_camera_buf_def_t &bufDef, uint32_t index);
+            mm_camera_buf_def_t &bufDef, uint32_t index, bool virtualAddr);
 
 protected:
     struct QCamera3MemInfo {
         int fd;
-        int main_ion_fd;
         ion_user_handle_t handle;
         size_t size;
     };
@@ -96,6 +95,7 @@ protected:
     void *mPtr[MM_CAMERA_MAX_NUM_FRAMES];
     int32_t mCurrentFrameNumbers[MM_CAMERA_MAX_NUM_FRAMES];
     Mutex mLock;
+    int main_ion_fd = -1;
 };
 
 // Internal heap memory is used for memories used internally
@@ -107,7 +107,7 @@ public:
     virtual ~QCamera3HeapMemory();
 
     int allocate(size_t size);
-    int allocateOne(size_t size);
+    int allocateOne(size_t size, bool isCached = true);
     void deallocate();
 
     virtual int cacheOps(uint32_t index, unsigned int cmd);
@@ -123,7 +123,7 @@ protected:
     virtual void *getPtrLocked(uint32_t index);
 private:
     int allocOneBuffer(struct QCamera3MemInfo &memInfo,
-            unsigned int heap_id, size_t size);
+            unsigned int heap_id, size_t size, bool isCached = true);
     void deallocOneBuffer(struct QCamera3MemInfo &memInfo);
     uint32_t mMaxCnt;
 };
@@ -147,7 +147,6 @@ public:
     virtual int32_t getOldestFrameNumber(uint32_t &index);
 
     void *getBufferHandle(uint32_t index);
-    void switchMaster(uint32_t masterCam);
 protected:
     virtual void *getPtrLocked(uint32_t index);
 private:
@@ -157,7 +156,6 @@ private:
     struct private_handle_t *mPrivateHandle[MM_CAMERA_MAX_NUM_FRAMES];
 
     uint32_t mStartIdx;
-    uint32_t mMasterCam;
 };
 };
 #endif

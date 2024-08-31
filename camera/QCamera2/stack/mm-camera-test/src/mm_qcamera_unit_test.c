@@ -30,6 +30,7 @@
 // Camera dependencies
 #include "mm_qcamera_app.h"
 #include "mm_qcamera_dbg.h"
+
 #include <unistd.h>
 
 #define MM_QCAMERA_APP_UTEST_MAX_MAIN_LOOP 1

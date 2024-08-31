@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2016, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -557,18 +557,6 @@ int process_meta_data(metadata_buffer_t *p_meta, QOMX_EXIF_INFO *exif_info,
         p_sensor_params = *l_sensor_params;
         is_sensor_meta_valid = true;
       }
-
-      IF_META_AVAILABLE(int32_t, flash_mode, CAM_INTF_PARM_LED_MODE, p_meta) {
-        p_sensor_params.flash_mode = *flash_mode;
-      } else {
-        LOGE("Cannot extract flash mode value");
-      }
-
-      IF_META_AVAILABLE(int32_t, flash_state, CAM_INTF_META_FLASH_STATE, p_meta) {
-        p_sensor_params.flash_state = (cam_flash_state_t) *flash_state;
-      } else {
-        LOGE("Cannot extract flash state value");
-      }
     } else {
       /* HAL V3 */
       IF_META_AVAILABLE(cam_3a_params_t, l_3a_params, CAM_INTF_META_AEC_INFO,
@@ -577,17 +565,27 @@ int process_meta_data(metadata_buffer_t *p_meta, QOMX_EXIF_INFO *exif_info,
         is_3a_meta_valid = true;
       }
 
+      p_3a_params.iso_value = 100;
       IF_META_AVAILABLE(int32_t, iso, CAM_INTF_META_SENSOR_SENSITIVITY, p_meta) {
-        p_3a_params.iso_value= *iso;
-#ifndef USE_HAL_3_3
-        IF_META_AVAILABLE(int32_t, ispSensitivity, CAM_INTF_META_ISP_SENSITIVITY,
-            p_meta) {
-          p_3a_params.iso_value= (*iso)*(*ispSensitivity)/100;
-      }
-#endif
+        p_3a_params.iso_value= p_3a_params.iso_value * (*iso) / 100;
       } else {
-        LOGE("Cannot extract Iso value");
+        LOGE("Cannot extract SENSOR_SENSITIVITY value");
       }
+
+      int32_t ispSensitivity = 100;
+      IF_META_AVAILABLE(int32_t, isp_iso, CAM_INTF_META_ISP_SENSITIVITY, p_meta) {
+        ispSensitivity = *isp_iso;
+      } else {
+        LOGE("Cannot extract ISP_SENSITIVITY value");
+      }
+
+      IF_META_AVAILABLE(float, post_stats_iso, CAM_INTF_META_ISP_POST_STATS_SENSITIVITY, p_meta) {
+        ispSensitivity *= *post_stats_iso;
+      } else {
+        /* CAM_INTF_META_ISP_POST_STATS_SENSITIVITY is optional */
+        LOGD("Cannot extract ISP_POST_STATS_SENSITIVITY value");
+      }
+      p_3a_params.iso_value= p_3a_params.iso_value * ispSensitivity / 100;
 
       IF_META_AVAILABLE(int64_t, sensor_exposure_time,
           CAM_INTF_META_SENSOR_EXPOSURE_TIME, p_meta) {
@@ -610,7 +608,7 @@ int process_meta_data(metadata_buffer_t *p_meta, QOMX_EXIF_INFO *exif_info,
         LOGE("Cannot extract Aperture value");
       }
 
-      IF_META_AVAILABLE(int32_t, flash_mode, CAM_INTF_PARM_LED_MODE, p_meta) {
+      IF_META_AVAILABLE(uint32_t, flash_mode, CAM_INTF_META_FLASH_MODE, p_meta) {
         p_sensor_params.flash_mode = *flash_mode;
       } else {
         LOGE("Cannot extract flash mode value");
@@ -661,6 +659,14 @@ int process_meta_data(metadata_buffer_t *p_meta, QOMX_EXIF_INFO *exif_info,
       sizeof(val_short)/2, &val_short);
     if (rc) {
       LOGE(": Error adding ASD Exif Entry");
+    }
+
+    IF_META_AVAILABLE(cam_makernote_t, makernote, CAM_INTF_META_MAKERNOTE, p_meta) {
+      rc = addExifEntry(exif_info, EXIFTAGID_EXIF_MAKER_NOTE, EXIF_UNDEFINED, makernote->length,
+          makernote->data);
+      if (rc) {
+        LOGE(": Error adding makernote");
+      }
     }
   } else {
     LOGE(": Error adding ASD Exif Entry, no meta");

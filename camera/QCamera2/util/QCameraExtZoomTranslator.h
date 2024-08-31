@@ -59,20 +59,13 @@ typedef struct {
     uint32_t      zoomRatioTableCount;
 } zoom_trans_init_data;
 
-typedef struct {
-    uint32_t zoomWideTotal;
-    uint32_t zoomTeleTotal;
-    uint32_t zoomWideIsp;
-    uint32_t zoomTeleIsp;
-} zoom_data;
-
 class QCameraExtZoomTranslator {
 public:
     ~QCameraExtZoomTranslator();
     static QCameraExtZoomTranslator* create();
     int32_t init(zoom_trans_init_data initData);
     int32_t deInit();
-    int32_t getZoomValues(uint32_t userZoom, zoom_data* zoomData);
+    int32_t getZoomValues(uint32_t userZoom, uint32_t *wideZoom, uint32_t *teleZoom);
     bool isInitialized();
 private:
     QCameraExtZoomTranslator();

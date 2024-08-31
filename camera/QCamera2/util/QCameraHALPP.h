@@ -1,4 +1,4 @@
-/* Copyright (c) 2016-2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2016, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -32,10 +32,9 @@
 
 // Camera dependencies
 #include "QCamera2HWI.h"
-#include "QCameraPprocManager.h"
+#include "QCameraPostProc.h"
 
 // STL dependencies
-#include <fcntl.h>
 #include <unordered_map>
 #include <vector>
 #include <sys/stat.h>
@@ -44,17 +43,21 @@ extern "C" {
 #include "mm_jpeg_interface.h"
 }
 
-typedef struct _cam_frame_size_t {
-    uint32_t width;
-    uint32_t height;
-    uint32_t stride;
-    uint32_t scanline;
-    uint32_t frame_len;
-    cam_frame_len_offset_t offset;
-} cam_frame_size_t;
-
 namespace qcamera {
 
+/** halPPBufNotify: function definition for frame notify
+*   handling
+*    @pOutput  : received qcamera_hal_pp_data_t data
+*    @pUserData: user data pointer
+**/
+typedef void (*halPPBufNotify) (qcamera_hal_pp_data_t *pOutput,
+                                        void *pUserData);
+
+/** halPPGetOutput: function definition for get output buffer
+*    @frameIndex: output frame index should match input frame index
+*    @pUserData: user data pointer
+**/
+typedef void (*halPPGetOutput) (uint32_t frameIndex, void *pUserData);
 
 class QCameraHALPP
 {
@@ -79,15 +82,9 @@ protected:
     static void releaseInputDataCb(void *pData, void *pUserData);
     static void releaseOngoingDataCb(void *pData, void *pUserData);
     void dumpYUVtoFile(const uint8_t* pBuf, const char *name, ssize_t buf_len);
-    int32_t getOutputBuffer(
-            qcamera_hal_pp_data_t *pInputData,
-            qcamera_hal_pp_data_t *pOutputData);
-
-    mm_camera_buf_def_t* getSnapshotBuf(qcamera_hal_pp_data_t* pData);
-    mm_camera_buf_def_t* getMetadataBuf(qcamera_hal_pp_data_t* pData);
 
 protected:
-    QCameraQueue m_inputQ;
+    QCameraQueue m_iuputQ;
     QCameraQueue m_outgoingQ;
 
     // hash map with frame index as key, and vecotr of input frames as value
@@ -95,7 +92,7 @@ protected:
 
     halPPBufNotify m_halPPBufNotifyCB;
     halPPGetOutput m_halPPGetOutputCB;
-    QCameraHALPPManager *m_pHalPPMgr;
+    QCameraPostProcessor *m_pQCameraPostProc;
 }; // QCameraHALPP class
 }; // namespace qcamera
 

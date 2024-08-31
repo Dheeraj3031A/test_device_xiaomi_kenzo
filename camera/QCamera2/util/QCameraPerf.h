@@ -34,14 +34,17 @@
 #include <utils/Mutex.h>
 
 // Camera dependencies
-#include "hardware/power.h"
+#include <android/hardware/power/1.2/IPower.h>
 
 using namespace android;
+using android::hardware::power::V1_2::IPower;
+using android::hardware::power::V1_2::PowerHint;
+using ::android::hardware::Return;
+using ::android::hardware::Void;
 
 namespace qcamera {
 
 #define DEFAULT_PERF_LOCK_TIMEOUT_MS 1000
-#define PERF_LOCK_BOKEH_SNAP_TIMEOUT_MS 5000
 
 typedef int32_t (*perfLockAcquire)(int, int, int[], int);
 typedef int32_t (*perfLockRelease)(int);
@@ -57,7 +60,6 @@ typedef enum {
     PERF_LOCK_OFFLINE_REPROC  = PERF_LOCK_TAKE_SNAPSHOT,
     PERF_LOCK_POWERHINT_PREVIEW,
     PERF_LOCK_POWERHINT_ENCODE,
-    PERF_LOCK_BOKEH_SNAPSHOT,
     PERF_LOCK_COUNT
 } PerfLockEnum;
 
@@ -84,7 +86,7 @@ public:
     bool releasePerfLock();
     bool acquirePerfLock(bool     forceReacquirePerfLock,
                          uint32_t timer = DEFAULT_PERF_LOCK_TIMEOUT_MS);
-    void powerHintInternal(power_hint_t powerHint, bool enable);
+    void powerHintInternal(PowerHint powerHint, int32_t time_out);
 
 protected:
     QCameraPerfLock(PerfLockEnum perfLockType, QCameraPerfLockIntf *perfLockIntf);
@@ -93,7 +95,6 @@ private:
     Mutex                mMutex;
     int32_t              mHandle;
     uint32_t             mRefCount;
-    bool                 mEnable;
     nsecs_t              mTimeOut;
     PerfLockEnum         mPerfLockType;
     QCameraPerfLockIntf *mPerfLockIntf;
@@ -114,7 +115,6 @@ private:
     uint32_t         mRefCount;
     perfLockAcquire  mPerfLockAcq;
     perfLockRelease  mPerfLockRel;
-    power_module_t  *mPowerModule;
     void            *mDlHandle;
 
 protected:
@@ -127,7 +127,7 @@ public:
 
     inline perfLockAcquire perfLockAcq() { return mPerfLockAcq; }
     inline perfLockRelease perfLockRel() { return mPerfLockRel; }
-    inline power_module_t* powerHintIntf() { return mPowerModule; }
+    bool powerHint(PowerHint hint, int32_t data);
 };
 
 
@@ -141,7 +141,7 @@ public:
 
     bool acquirePerfLockIfExpired(PerfLockEnum perfLockRnum,
                                   uint32_t     timer = DEFAULT_PERF_LOCK_TIMEOUT_MS);
-    void powerHintInternal(PerfLockEnum perfLockType, power_hint_t powerHint, bool enable);
+    void powerHintInternal(PerfLockEnum perfLockType, PowerHint powerHint, int32_t time_out);
 
 private:
     PerfLockMgrStateEnum mState;

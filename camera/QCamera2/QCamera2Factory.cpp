@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2016, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -36,7 +36,7 @@
 
 // Camera dependencies
 #ifdef QCAMERA_HAL1_SUPPORT
-#include "hardware/camera.h"
+#include "camera.h"
 #include "HAL/QCamera2HWI.h"
 #include "QCameraMuxer.h"
 #endif
@@ -84,7 +84,7 @@ QCamera2Factory::QCamera2Factory()
     int bDualCamera = 0;
     char propDefault[PROPERTY_VALUE_MAX];
     char prop[PROPERTY_VALUE_MAX];
-    property_get("persist.vendor.camera.HAL3.enabled", prop, "1");
+    property_get("persist.camera.HAL3.enabled", prop, "1");
     int isHAL3Enabled = atoi(prop);
 #ifndef QCAMERA_HAL1_SUPPORT
     isHAL3Enabled = 1;
@@ -92,7 +92,7 @@ QCamera2Factory::QCamera2Factory()
 
     // Signifies whether system has to enable dual camera mode
     snprintf(propDefault, PROPERTY_VALUE_MAX, "%d", isDualCamAvailable(isHAL3Enabled));
-    property_get("persist.vendor.camera.dual.camera", prop, propDefault);
+    property_get("persist.camera.dual.camera", prop, propDefault);
     bDualCamera = atoi(prop);
     LOGH("dualCamera:%d ", bDualCamera);
 #ifndef QCAMERA_HAL1_SUPPORT
@@ -215,6 +215,71 @@ int QCamera2Factory::get_camera_info(int camera_id, struct camera_info *info)
         rc =  gQCamera2Factory->getCameraInfo(camera_id, info);
 
     return rc;
+}
+
+/*===========================================================================
+ * FUNCTION   : get_physical_camera_info
+ *
+ * DESCRIPTION: static function to query physical camera information
+ *
+ * PARAMETERS :
+ *   @physical_camera_id : physical camera ID
+ *   @static_metadata    : camera information
+ *
+ * RETURN     : int32_t type of status
+ *              NO_ERROR  -- success
+ *              none-zero failure code
+ *==========================================================================*/
+int QCamera2Factory::get_physical_camera_info(int /*physical_camera_id*/,
+        camera_metadata_t ** /*static_metadata*/)
+{
+    return BAD_VALUE;
+}
+
+/*===========================================================================
+ * FUNCTION   : is_camera_combination_supported
+ *
+ * DESCRIPTION: static function to query camera combination support
+ *
+ * PARAMETERS :
+ *   @camera_id : camera ID
+ *   @streams   : stream combination
+ *
+ * RETURN     : int32_t type of status
+ *              NO_ERROR  -- in case combination is supported
+ *              none-zero failure code
+ *==========================================================================*/
+int QCamera2Factory::is_stream_combination_supported(int camera_id,
+        const camera_stream_combination_t *streams)
+{
+    return gQCamera2Factory->isStreamCombinationSupported(camera_id, streams);
+}
+
+/*===========================================================================
+ * FUNCTION   : isStreamCombinationSupported
+ *
+ * DESCRIPTION: method to query camera combination support
+ *
+ * PARAMETERS :
+ *   @camera_id : camera ID
+ *   @streams   : stream combination
+ *
+ * RETURN     : int32_t type of status
+ *              NO_ERROR  -- in case combination is supported
+ *              none-zero failure code
+ *==========================================================================*/
+int QCamera2Factory::isStreamCombinationSupported(int camera_id,
+        const camera_stream_combination_t *streams)
+{
+    if (!mNumOfCameras || camera_id >= mNumOfCameras || !streams ||
+        (camera_id < 0)) {
+        LOGE("Error during stream combination query!! mNumOfCameras = %d,"
+                "camera_id = %d, info = %p",
+                 mNumOfCameras, camera_id, streams);
+        return BAD_VALUE;
+    }
+
+    return QCamera3HardwareInterface::isStreamCombinationSupported(camera_id, streams);
 }
 
 /*===========================================================================

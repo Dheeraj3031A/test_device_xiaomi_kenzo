@@ -32,7 +32,7 @@
 
 // System dependencies
 #include <utils/Mutex.h>
-
+#include <hardware/gralloc1.h>
 // Camera dependencies
 #include "QCamera3Mem.h"
 
@@ -46,7 +46,7 @@ namespace qcamera {
 
 class QCamera3StreamMem {
 public:
-    QCamera3StreamMem(uint32_t maxHeapBuffer, bool queueAll = true);
+    QCamera3StreamMem(uint32_t maxHeapBuffer);
     virtual ~QCamera3StreamMem();
 
     uint32_t getCnt();
@@ -59,7 +59,8 @@ public:
     int cleanInvalidateCache(uint32_t index);
     int cleanCache(uint32_t index);
     int32_t getBufDef(const cam_frame_len_offset_t &offset,
-            mm_camera_buf_def_t &bufDef, uint32_t index);
+            mm_camera_buf_def_t &bufDef, uint32_t index,
+            bool virtualAddr);
     void *getPtr(uint32_t index);
 
     bool valid(uint32_t index);
@@ -73,7 +74,7 @@ public:
 
     // Heap buffer related functions
     int allocateAll(size_t size);
-    int allocateOne(size_t size);
+    int allocateOne(size_t size, bool isCached = true);
     void deallocate(); //TODO: replace with unified clear() function?
 
     // Clear function: unregister for gralloc buffer, and deallocate for heap buffer
@@ -86,7 +87,6 @@ public:
     int32_t getGrallocBufferIndex(uint32_t frameNumber);
     int32_t getHeapBufferIndex(uint32_t frameNumber);
     int32_t getBufferIndex(uint32_t frameNumber);
-    void switchMaster(uint32_t masterCam);
 
 private:
     //variables
@@ -94,7 +94,87 @@ private:
     QCamera3GrallocMemory mGrallocMem;
     uint32_t mMaxHeapBuffers;
     Mutex mLock;
-    bool mQueueHeapBuffers;
+};
+
+/// @brief Gralloc1 interface functions
+struct Gralloc1Interface
+{
+    int32_t (*CreateDescriptor)(
+        gralloc1_device_t*             pGralloc1Device,
+        gralloc1_buffer_descriptor_t*  pCreatedDescriptor);
+    int32_t (*DestroyDescriptor)(
+        gralloc1_device_t*            pGralloc1Device,
+        gralloc1_buffer_descriptor_t  descriptor);
+    int32_t (*SetDimensions)(
+        gralloc1_device_t*           pGralloc1Device,
+        gralloc1_buffer_descriptor_t descriptor,
+        uint32_t                       width,
+        uint32_t                       height);
+    int32_t (*SetFormat)(
+        gralloc1_device_t*           pGralloc1Device,
+        gralloc1_buffer_descriptor_t descriptor,
+        int32_t                        format);
+    int32_t (*SetLayerCount)(
+        gralloc1_device_t*           pGralloc1Device,
+        gralloc1_buffer_descriptor_t descriptor,
+        uint32_t                     layerCount);
+    int32_t (*SetProducerUsage)(
+        gralloc1_device_t*           pGralloc1Device,
+        gralloc1_buffer_descriptor_t descriptor,
+        uint64_t                     usage);
+    int32_t (*SetConsumerUsage)(
+        gralloc1_device_t*           pGralloc1Device,
+        gralloc1_buffer_descriptor_t descriptor,
+        uint64_t                     usage);
+    int32_t (*Allocate)(
+        gralloc1_device_t*                  pGralloc1Device,
+        uint32_t                              numDescriptors,
+        const gralloc1_buffer_descriptor_t* pDescriptors,
+        buffer_handle_t*                    pAllocatedBuffers);
+    int32_t (*GetStride)(
+        gralloc1_device_t* pGralloc1Device,
+        buffer_handle_t    buffer,
+        uint32_t*            pStride);
+    int32_t (*Release)(
+        gralloc1_device_t* pGralloc1Device,
+        buffer_handle_t    buffer);
+    int32_t (*Lock)(
+            gralloc1_device_t*      device,
+            buffer_handle_t         buffer,
+            uint64_t                producerUsage,
+            uint64_t                consumerUsage,
+            const gralloc1_rect_t*  accessRegion,
+            void**                  outData,
+            int32_t                 acquireFence);
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/// @brief General native buffer implementation
+///
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class NativeBufferInterface final
+{
+public:
+    static NativeBufferInterface* GetInstance() {
+        static NativeBufferInterface mInstance;
+        return &mInstance;
+    }
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// GetGrallocBufferStride
+    ///
+    /// @brief Get buffer stride from gralloc interface
+    ///
+    /// @param handle Native HAL buffer handle
+    ///
+    /// @return Return the stride size
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    uint32_t GetGrallocBufferStride(uint32_t width, uint32_t height, uint32_t fmt);
+private:
+    NativeBufferInterface();
+    ~NativeBufferInterface();
+
+    gralloc1_device_t* m_pGralloc1Device;
+    Gralloc1Interface  m_grallocInterface;
 };
 
 };

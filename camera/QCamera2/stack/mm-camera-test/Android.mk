@@ -2,10 +2,8 @@ OLD_LOCAL_PATH := $(LOCAL_PATH)
 LOCAL_PATH:=$(call my-dir)
 
 # Build command line test app: mm-qcamera-app
+include $(LOCAL_PATH)/../../../common.mk
 include $(CLEAR_VARS)
-
-LOCAL_HEADER_LIBRARIES := libutils_headers
-LOCAL_HEADER_LIBRARIES += media_plugin_headers
 
 LOCAL_CFLAGS:= \
         -DAMSS_VERSION=$(AMSS_VERSION) \
@@ -21,9 +19,6 @@ LOCAL_CFLAGS += -D_ANDROID_ -DQCAMERA_REDEFINE_LOG
 
 # System header file path prefix
 LOCAL_CFLAGS += -DSYSTEM_HEADER_PREFIX=sys
-ifeq (1,$(filter 1,$(shell echo "$$(( $(PLATFORM_SDK_VERSION) >= 31 ))" )))
-LOCAL_CFLAGS += -Wno-compound-token-split-by-macro
-endif
 
 LOCAL_SRC_FILES:= \
         src/mm_qcamera_main_menu.c \
@@ -41,12 +36,14 @@ LOCAL_SRC_FILES:= \
 
 LOCAL_C_INCLUDES:=$(LOCAL_PATH)/inc
 LOCAL_C_INCLUDES+= \
+        frameworks/native/include/media/openmax \
         $(LOCAL_PATH)/../common \
         $(LOCAL_PATH)/../mm-camera-interface/inc \
         $(LOCAL_PATH)/../../../mm-image-codec/qexif \
         $(LOCAL_PATH)/../../../mm-image-codec/qomx_core
 
-LOCAL_HEADER_LIBRARIES += generated_kernel_headers
+LOCAL_C_INCLUDES+= $(kernel_includes)
+LOCAL_ADDITIONAL_DEPENDENCIES := $(common_deps)
 
 LOCAL_CFLAGS += -DCAMERA_ION_HEAP_ID=ION_IOMMU_HEAP_ID
 ifeq ($(TARGET_BOARD_PLATFORM),msm8974)
@@ -96,16 +93,14 @@ LOCAL_MODULE_TAGS := optional
 LOCAL_32_BIT_ONLY := $(BOARD_QTI_CAMERA_32BIT_ONLY)
 
 LOCAL_MODULE:= mm-qcamera-app
-LOCAL_VENDOR_MODULE := true
-include $(SDCLANG_COMMON_DEFS)
+LOCAL_LICENSE_KINDS:= SPDX-license-identifier-Apache-2.0 SPDX-license-identifier-BSD
+LOCAL_LICENSE_CONDITIONS:= notice
+LOCAL_PROPRIETARY_MODULE := true
 
 include $(BUILD_EXECUTABLE)
 
 # Build tuning library
 include $(CLEAR_VARS)
-
-LOCAL_HEADER_LIBRARIES := libutils_headers
-LOCAL_HEADER_LIBRARIES += media_plugin_headers
 
 LOCAL_CFLAGS:= \
         -DAMSS_VERSION=$(AMSS_VERSION) \
@@ -121,9 +116,6 @@ LOCAL_CFLAGS += -D_ANDROID_ -DQCAMERA_REDEFINE_LOG
 
 # System header file path prefix
 LOCAL_CFLAGS += -DSYSTEM_HEADER_PREFIX=sys
-ifeq (1,$(filter 1,$(shell echo "$$(( $(PLATFORM_SDK_VERSION) >= 31 ))" )))
-LOCAL_CFLAGS += -Wno-compound-token-split-by-macro
-endif
 
 LOCAL_SRC_FILES:= \
         src/mm_qcamera_main_menu.c \
@@ -141,12 +133,14 @@ LOCAL_SRC_FILES:= \
 
 LOCAL_C_INCLUDES:=$(LOCAL_PATH)/inc
 LOCAL_C_INCLUDES+= \
+        frameworks/native/include/media/openmax \
         $(LOCAL_PATH)/../common \
         $(LOCAL_PATH)/../mm-camera-interface/inc \
         $(LOCAL_PATH)/../../../mm-image-codec/qexif \
         $(LOCAL_PATH)/../../../mm-image-codec/qomx_core
 
-LOCAL_HEADER_LIBRARIES += generated_kernel_headers
+LOCAL_C_INCLUDES+= $(kernel_includes)
+LOCAL_ADDITIONAL_DEPENDENCIES := $(common_deps)
 
 LOCAL_CFLAGS += -DCAMERA_ION_HEAP_ID=ION_IOMMU_HEAP_ID
 ifeq ($(TARGET_BOARD_PLATFORM),msm8974)
@@ -196,9 +190,26 @@ LOCAL_MODULE_TAGS := optional
 LOCAL_32_BIT_ONLY := $(BOARD_QTI_CAMERA_32BIT_ONLY)
 
 LOCAL_MODULE:= libmm-qcamera
-LOCAL_VENDOR_MODULE := true
-include $(SDCLANG_COMMON_DEFS)
+LOCAL_LICENSE_KINDS:= SPDX-license-identifier-Apache-2.0 SPDX-license-identifier-BSD
+LOCAL_LICENSE_CONDITIONS:= notice
+LOCAL_PROPRIETARY_MODULE := true
 
 include $(BUILD_SHARED_LIBRARY)
+
+# Build cam_semaphore_tests
+include $(CLEAR_VARS)
+
+LOCAL_SRC_FILES := src/cam_semaphore_tests.cpp
+
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/../common
+
+LOCAL_CFLAGS := -Wall -Wextra -Werror
+
+LOCAL_MODULE := cam_semaphore_tests
+LOCAL_LICENSE_KINDS := SPDX-license-identifier-Apache-2.0 SPDX-license-identifier-BSD
+LOCAL_LICENSE_CONDITIONS := notice
+LOCAL_MODULE_TAGS := tests
+
+include $(BUILD_NATIVE_TEST)
 
 LOCAL_PATH := $(OLD_LOCAL_PATH)

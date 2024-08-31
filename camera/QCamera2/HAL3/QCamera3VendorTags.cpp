@@ -63,16 +63,17 @@ enum qcamera3_ext_tags qcamera3_ext3_section_bounds[QCAMERA3_SECTIONS_END -
         QCAMERA3_AEC_CONVERGENCE_SPEED_END,
         QCAMERA3_AWB_CONVERGENCE_SPEED_END,
         QCAMERA3_INSTANT_AEC_END,
+        NEXUS_EXPERIMENTAL_2016_END,
         QCAMERA3_SHARPNESS_END,
         QCAMERA3_HISTOGRAM_END,
         QCAMERA3_BINNING_CORRECTION_END,
         QCAMERA3_STATS_END,
-        QCAMERA3_SIMULTANEOUS_CAMERA_END,
-        QCAMERA3_QUADRA_CFA_DATA_END,
-        QCAMERA3_HFR_END,
-        QCAMERA3_BOKEH_END,
-        QCAMERA3_FUSION_END,
-        QCAMERA3_LOGICAL_CAM_END,
+        NEXUS_EXPERIMENTAL_2017_END,
+};
+
+enum qcamera3_ext_tags tango_section_bounds[TANGO_SECTIONS_END -
+    TANGO_SECTIONS_START] = {
+        TANGO_MODE_DATA_END,
 };
 
 typedef struct vendor_tag_info {
@@ -102,16 +103,17 @@ const char *qcamera3_ext_section_names[QCAMERA3_SECTIONS_END -
     "org.codeaurora.qcamera3.aec_convergence_speed",
     "org.codeaurora.qcamera3.awb_convergence_speed",
     "org.codeaurora.qcamera3.instant_aec",
+    "com.google.nexus.experimental2016",
     "org.codeaurora.qcamera3.sharpness",
     "org.codeaurora.qcamera3.histogram",
     "org.codeaurora.qcamera3.binning_correction",
     "org.codeaurora.qcamera3.stats",
-    "org.codeaurora.qcamera3.simultaneous_camera",
-    "org.codeaurora.qcamera3.quadra_cfa",
-    "org.codeaurora.qcamera3.hfr",
-    "org.codeaurora.qcamera3.bokeh",
-    "org.codeaurora.qcamera3.fusion",
-    "org.codeaurora.qcamera3.logical"
+    "com.google.nexus.experimental2017",
+};
+
+const char *tango_section_names[TANGO_SECTIONS_END -
+      TANGO_SECTIONS_START] = {
+    "com.google.tango"
 };
 
 vendor_tag_info_t qcamera3_privatedata[QCAMERA3_PRIVATEDATA_END - QCAMERA3_PRIVATEDATA_START] = {
@@ -182,7 +184,7 @@ vendor_tag_info_t
         QCAMERA3_DUALCAM_LINK_META_DATA_START] = {
     { "enable",            TYPE_BYTE },
     { "is_main",           TYPE_BYTE },
-    { "related_camera_id", TYPE_INT32 }
+    { "related_camera_id", TYPE_BYTE }
 };
 
 vendor_tag_info_t
@@ -232,8 +234,77 @@ vendor_tag_info_t qcamera3_awb_speed[QCAMERA3_AWB_CONVERGENCE_SPEED_END -
 vendor_tag_info_t
         qcamera3_instant_aec[QCAMERA3_INSTANT_AEC_END -
         QCAMERA3_INSTANT_AEC_START] = {
-    { "instant_aec_mode", TYPE_INT32 },
-    { "instant_aec_available_modes",   TYPE_INT32 }
+    { "instant_aec_mode", TYPE_BYTE },
+    { "instant_aec_available_modes",   TYPE_BYTE }
+};
+
+vendor_tag_info_t nexus_experimental_2016[NEXUS_EXPERIMENTAL_2016_END -
+        NEXUS_EXPERIMENTAL_2016_START] = {
+   {"3a.hybrid_ae_enable",                     TYPE_BYTE  },
+   {"control.af_scene_change",                 TYPE_BYTE  },
+      // DevCamDebug vendor tag
+   { "devcamdebug_meta_enable",                TYPE_BYTE  },
+   // DevCamDebug vendor tag AF
+   { "devcamdebug_af_lens_position",           TYPE_INT32 },
+   { "devcamdebug_af_tof_confidence",          TYPE_INT32 },
+   { "devcamdebug_af_tof_distance",            TYPE_INT32 },
+   { "devcamdebug_af_luma",                    TYPE_INT32 },
+   { "devcamdebug_af_haf_state",               TYPE_INT32 },
+   { "devcamdebug_af_monitor_pdaf_target_pos", TYPE_INT32 },
+   { "devcamdebug_af_monitor_pdaf_confidence", TYPE_INT32 },
+   { "devcamdebug_af_monitor_pdaf_refocus",    TYPE_INT32 },
+   { "devcamdebug_af_monitor_tof_target_pos",  TYPE_INT32 },
+   { "devcamdebug_af_monitor_tof_confidence",  TYPE_INT32 },
+   { "devcamdebug_af_monitor_tof_refocus",     TYPE_INT32 },
+   { "devcamdebug_af_monitor_type_select",     TYPE_INT32 },
+   { "devcamdebug_af_monitor_refocus",         TYPE_INT32 },
+   { "devcamdebug_af_monitor_target_pos",      TYPE_INT32 },
+   { "devcamdebug_af_search_pdaf_target_pos",  TYPE_INT32 },
+   { "devcamdebug_af_search_pdaf_next_pos",    TYPE_INT32 },
+   { "devcamdebug_af_search_pdaf_near_pos",    TYPE_INT32 },
+   { "devcamdebug_af_search_pdaf_far_pos",     TYPE_INT32 },
+   { "devcamdebug_af_search_pdaf_confidence",  TYPE_INT32 },
+   { "devcamdebug_af_search_tof_target_pos",   TYPE_INT32 },
+   { "devcamdebug_af_search_tof_next_pos",     TYPE_INT32 },
+   { "devcamdebug_af_search_tof_near_pos",     TYPE_INT32 },
+   { "devcamdebug_af_search_tof_far_pos",      TYPE_INT32 },
+   { "devcamdebug_af_search_tof_confidence",   TYPE_INT32 },
+   { "devcamdebug_af_search_type_select",      TYPE_INT32 },
+   { "devcamdebug_af_search_next_pos",         TYPE_INT32 },
+   { "devcamdebug_af_search_target_pos",       TYPE_INT32 },
+   // DevCamDebug vendor tag AEC
+   { "devcamdebug_aec_target_luma",            TYPE_INT32 },
+   { "devcamdebug_aec_comp_luma",              TYPE_INT32 },
+   { "devcamdebug_aec_avg_luma",               TYPE_INT32 },
+   { "devcamdebug_aec_cur_luma",               TYPE_INT32 },
+   { "devcamdebug_aec_linecount",              TYPE_INT32 },
+   { "devcamdebug_aec_real_gain",              TYPE_FLOAT },
+   { "devcamdebug_aec_exp_index",              TYPE_INT32 },
+   { "devcamdebug_aec_lux_idx",                TYPE_FLOAT },
+   // DevCamDebug vendor tag zzHDR
+   { "devcamdebug_aec_l_real_gain",            TYPE_FLOAT },
+   { "devcamdebug_aec_l_linecount",            TYPE_INT32 },
+   { "devcamdebug_aec_s_real_gain",            TYPE_FLOAT },
+   { "devcamdebug_aec_s_linecount",            TYPE_INT32 },
+   { "devcamdebug_aec_hdr_sensitivity_ratio",  TYPE_FLOAT },
+   { "devcamdebug_aec_hdr_exp_time_ratio",     TYPE_FLOAT },
+   // DevCamDebug vendor tag ADRC
+   { "devcamdebug_aec_total_drc_gain",         TYPE_FLOAT },
+   { "devcamdebug_aec_color_drc_gain",         TYPE_FLOAT },
+   { "devcamdebug_aec_gtm_ratio",              TYPE_FLOAT },
+   { "devcamdebug_aec_ltm_ratio",              TYPE_FLOAT },
+   { "devcamdebug_aec_la_ratio",               TYPE_FLOAT },
+   { "devcamdebug_aec_gamma_ratio",            TYPE_FLOAT },
+   // DevCamDebug vendor AEC MOTION
+   { "devcamdebug_aec_camera_motion_dx",       TYPE_FLOAT },
+   { "devcamdebug_aec_camera_motion_dy",       TYPE_FLOAT },
+   { "devcamdebug_aec_subject_motion",         TYPE_FLOAT },
+   // DevCamDebug vendor tag AWB
+   { "devcamdebug_awb_r_gain",                 TYPE_FLOAT },
+   { "devcamdebug_awb_g_gain",                 TYPE_FLOAT },
+   { "devcamdebug_awb_b_gain",                 TYPE_FLOAT },
+   { "devcamdebug_awb_cct",                    TYPE_INT32 },
+   { "devcamdebug_awb_decision",               TYPE_INT32 },
 };
 
 vendor_tag_info_t qcamera3_sharpness[QCAMERA3_SHARPNESS_END -
@@ -272,37 +343,50 @@ vendor_tag_info_t qcamera3_stats[QCAMERA3_STATS_END -
     { "gaze_degree", TYPE_BYTE }
 };
 
-vendor_tag_info_t qcamera3_simultaneous_camera[QCAMERA3_SIMULTANEOUS_CAMERA_END-
-        QCAMERA3_SIMULTANEOUS_CAMERA_START] = {
-    { "vfe1_reserved_rdi", TYPE_INT32 },
+vendor_tag_info_t nexus_experimental_2017[NEXUS_EXPERIMENTAL_2017_END -
+        NEXUS_EXPERIMENTAL_2017_START] = {
+    { "stats.histogramMode", TYPE_BYTE },
+    { "stats.availableHistogramBucketCounts", TYPE_INT32 },
+    { "stats.histogramBucketCount", TYPE_INT32 },
+    { "stats.histogram", TYPE_INT32 },
+    { "sensorEepromInfo", TYPE_BYTE },
+    { "sensorEepromPDAFRightGains", TYPE_BYTE },
+    { "sensorEepromPDAFLeftGains", TYPE_BYTE },
+    { "sensorEepromPDAFConvCoeff", TYPE_BYTE },
+    { "sensorEepromWbNumLights", TYPE_INT32 },
+    { "sensorEepromWbRGRatios", TYPE_FLOAT },
+    { "sensorEepromWbBGRatios", TYPE_FLOAT },
+    { "sensorEepromWbGrGbRatio", TYPE_FLOAT },
+    { "control.tracking_af_trigger", TYPE_BYTE },
+    { "control.af_regions_confidence", TYPE_INT32 },
+    { "stats.ois_frame_timestamp_vsync", TYPE_INT64 },
+    { "stats.ois_frame_timestamp_boottime", TYPE_INT64 },
+    { "stats.ois_timestamps_boottime", TYPE_INT64 },
+    { "stats.ois_shift_x", TYPE_INT32 },
+    { "stats.ois_shift_y", TYPE_INT32 },
+    { "stats.ois_shift_pixel_x", TYPE_FLOAT },
+    { "stats.ois_shift_pixel_y", TYPE_FLOAT },
+    { "sensor.pd_data_dimensions", TYPE_INT32},
+    { "sensor.pd_data_enable", TYPE_BYTE},
+    { "control.exposure_time_boost", TYPE_FLOAT},
+    { "request.makernote", TYPE_BYTE },
+    { "request.next_still_intent_request_ready", TYPE_BYTE },
+    { "request.postview", TYPE_INT32},
+    { "request.postview_config", TYPE_INT32},
+    { "request.postview_data", TYPE_BYTE},
+    { "request.continuous_zsl_capture", TYPE_INT32},
+    { "request.disable_hdrplus", TYPE_INT32},
+    { "control.scene_distance", TYPE_INT32},
+    { "stats.motion_detection_enable", TYPE_BYTE},
+    { "stats.camera_motion_x", TYPE_FLOAT},
+    { "stats.camera_motion_y", TYPE_FLOAT},
+    { "stats.subject_motion", TYPE_FLOAT},
 };
 
-vendor_tag_info_t qcamera3_quadra_cfa[QCAMERA3_QUADRA_CFA_DATA_END -
-        QCAMERA3_QUADRA_CFA_DATA_START] = {
-    { "is_qcfa_sensor", TYPE_BYTE },
-    { "qcfa_dimension", TYPE_INT32 },
-};
-
-vendor_tag_info_t qcamera3_hfr[QCAMERA3_HFR_END -
-        QCAMERA3_HFR_START] = {
-    { "sizes", TYPE_INT32 }
-};
-
-vendor_tag_info_t qcamera3_bokeh[QCAMERA3_BOKEH_END -
-        QCAMERA3_BOKEH_START] = {
-    { "enable", TYPE_BYTE },
-    { "blurLevel", TYPE_INT32 },
-    { "status", TYPE_INT32 }
-};
-
-vendor_tag_info_t qcamera3_fusion[QCAMERA3_FUSION_END -
-        QCAMERA3_FUSION_START] = {
-    { "status", TYPE_BYTE }
-};
-
-vendor_tag_info_t qcamera3_logical_cam[QCAMERA3_LOGICAL_CAM_END -
-        QCAMERA3_LOGICAL_CAM_START] = {
-    { "mode", TYPE_BYTE }
+vendor_tag_info_t tango_mode_data[TANGO_MODE_DATA_END -
+        TANGO_MODE_DATA_START] = {
+    { "tango_mode", TYPE_BYTE}, //Unused. Reserved for backward compatibility
+    { "sensor.fullfov", TYPE_BYTE },
 };
 
 vendor_tag_info_t *qcamera3_tag_info[QCAMERA3_SECTIONS_END -
@@ -327,16 +411,17 @@ vendor_tag_info_t *qcamera3_tag_info[QCAMERA3_SECTIONS_END -
     qcamera3_aec_speed,
     qcamera3_awb_speed,
     qcamera3_instant_aec,
+    nexus_experimental_2016,
     qcamera3_sharpness,
     qcamera3_histogram,
     qcamera3_binning_correction,
     qcamera3_stats,
-    qcamera3_simultaneous_camera,
-    qcamera3_quadra_cfa,
-    qcamera3_hfr,
-    qcamera3_bokeh,
-    qcamera3_fusion,
-    qcamera3_logical_cam,
+    nexus_experimental_2017,
+};
+
+vendor_tag_info_t *tango_tag_info[TANGO_SECTIONS_END -
+      TANGO_SECTIONS_START] = {
+    tango_mode_data,
 };
 
 uint32_t qcamera3_all_tags[] = {
@@ -384,6 +469,73 @@ uint32_t qcamera3_all_tags[] = {
     (uint32_t)QCAMERA3_SENSOR_DYNAMIC_BLACK_LEVEL_PATTERN,
     (uint32_t)QCAMERA3_SENSOR_IS_MONO_ONLY,
 
+    //NEXUS_EXPERIMENTAL_2016
+    (uint32_t)NEXUS_EXPERIMENTAL_2016_AF_SCENE_CHANGE,
+    // DEVCAMDEBUG
+    (uint32_t)DEVCAMDEBUG_META_ENABLE,
+    // DEVCAMDEBUG AF
+    (uint32_t)DEVCAMDEBUG_AF_LENS_POSITION,
+    (uint32_t)DEVCAMDEBUG_AF_TOF_CONFIDENCE,
+    (uint32_t)DEVCAMDEBUG_AF_TOF_DISTANCE,
+    (uint32_t)DEVCAMDEBUG_AF_LUMA,
+    (uint32_t)DEVCAMDEBUG_AF_HAF_STATE,
+    (uint32_t)DEVCAMDEBUG_AF_MONITOR_PDAF_TARGET_POS,
+    (uint32_t)DEVCAMDEBUG_AF_MONITOR_PDAF_CONFIDENCE,
+    (uint32_t)DEVCAMDEBUG_AF_MONITOR_PDAF_REFOCUS,
+    (uint32_t)DEVCAMDEBUG_AF_MONITOR_TOF_TARGET_POS,
+    (uint32_t)DEVCAMDEBUG_AF_MONITOR_TOF_CONFIDENCE,
+    (uint32_t)DEVCAMDEBUG_AF_MONITOR_TOF_REFOCUS,
+    (uint32_t)DEVCAMDEBUG_AF_MONITOR_TYPE_SELECT,
+    (uint32_t)DEVCAMDEBUG_AF_MONITOR_REFOCUS,
+    (uint32_t)DEVCAMDEBUG_AF_MONITOR_TARGET_POS,
+    (uint32_t)DEVCAMDEBUG_AF_SEARCH_PDAF_TARGET_POS,
+    (uint32_t)DEVCAMDEBUG_AF_SEARCH_PDAF_NEXT_POS,
+    (uint32_t)DEVCAMDEBUG_AF_SEARCH_PDAF_NEAR_POS,
+    (uint32_t)DEVCAMDEBUG_AF_SEARCH_PDAF_FAR_POS,
+    (uint32_t)DEVCAMDEBUG_AF_SEARCH_PDAF_CONFIDENCE,
+    (uint32_t)DEVCAMDEBUG_AF_SEARCH_TOF_TARGET_POS,
+    (uint32_t)DEVCAMDEBUG_AF_SEARCH_TOF_NEXT_POS,
+    (uint32_t)DEVCAMDEBUG_AF_SEARCH_TOF_NEAR_POS,
+    (uint32_t)DEVCAMDEBUG_AF_SEARCH_TOF_FAR_POS,
+    (uint32_t)DEVCAMDEBUG_AF_SEARCH_TOF_CONFIDENCE,
+    (uint32_t)DEVCAMDEBUG_AF_SEARCH_TYPE_SELECT,
+    (uint32_t)DEVCAMDEBUG_AF_SEARCH_NEXT_POS,
+    (uint32_t)DEVCAMDEBUG_AF_SEARCH_TARGET_POS,
+    // DEVCAMDEBUG AEC
+    (uint32_t)DEVCAMDEBUG_AEC_TARGET_LUMA,
+    (uint32_t)DEVCAMDEBUG_AEC_COMP_LUMA,
+    (uint32_t)DEVCAMDEBUG_AEC_AVG_LUMA,
+    (uint32_t)DEVCAMDEBUG_AEC_CUR_LUMA,
+    (uint32_t)DEVCAMDEBUG_AEC_LINECOUNT,
+    (uint32_t)DEVCAMDEBUG_AEC_REAL_GAIN,
+    (uint32_t)DEVCAMDEBUG_AEC_EXP_INDEX,
+    (uint32_t)DEVCAMDEBUG_AEC_LUX_IDX,
+    // DEVCAMDEBUG zzHDR
+    (uint32_t)DEVCAMDEBUG_AEC_L_REAL_GAIN,
+    (uint32_t)DEVCAMDEBUG_AEC_L_LINECOUNT,
+    (uint32_t)DEVCAMDEBUG_AEC_S_REAL_GAIN,
+    (uint32_t)DEVCAMDEBUG_AEC_S_LINECOUNT,
+    (uint32_t)DEVCAMDEBUG_AEC_HDR_SENSITIVITY_RATIO,
+    (uint32_t)DEVCAMDEBUG_AEC_HDR_EXP_TIME_RATIO,
+    // DEVCAMDEBUG ADRC
+    (uint32_t)DEVCAMDEBUG_AEC_TOTAL_DRC_GAIN,
+    (uint32_t)DEVCAMDEBUG_AEC_COLOR_DRC_GAIN,
+    (uint32_t)DEVCAMDEBUG_AEC_GTM_RATIO,
+    (uint32_t)DEVCAMDEBUG_AEC_LTM_RATIO,
+    (uint32_t)DEVCAMDEBUG_AEC_LA_RATIO,
+    (uint32_t)DEVCAMDEBUG_AEC_GAMMA_RATIO,
+    // DEVCAMDEBUG AEC MOTION
+    (uint32_t)DEVCAMDEBUG_AEC_CAMERA_MOTION_DX,
+    (uint32_t)DEVCAMDEBUG_AEC_CAMERA_MOTION_DY,
+    (uint32_t)DEVCAMDEBUG_AEC_SUBJECT_MOTION,
+    // DEVCAMDEBUG AWB
+    (uint32_t)DEVCAMDEBUG_AWB_R_GAIN,
+    (uint32_t)DEVCAMDEBUG_AWB_G_GAIN,
+    (uint32_t)DEVCAMDEBUG_AWB_B_GAIN,
+    (uint32_t)DEVCAMDEBUG_AWB_CCT,
+    (uint32_t)DEVCAMDEBUG_AWB_DECISION,
+    // DEVCAMDEBUG END
+
     // QCAMERA3_DUALCAM_LINK_META_DATA
     (uint32_t)QCAMERA3_DUALCAM_LINK_ENABLE,
     (uint32_t)QCAMERA3_DUALCAM_LINK_IS_MAIN,
@@ -420,6 +572,9 @@ uint32_t qcamera3_all_tags[] = {
     (uint32_t)QCAMERA3_INSTANT_AEC_MODE,
     (uint32_t)QCAMERA3_INSTANT_AEC_AVAILABLE_MODES,
 
+    //NEXUS_EXPERIMENTAL_2016
+    (uint32_t)NEXUS_EXPERIMENTAL_2016_HYBRID_AE_ENABLE,
+
     //QCAMERA3_SHARPNESS
     (uint32_t)QCAMERA3_SHARPNESS_STRENGTH,
     (uint32_t)QCAMERA3_SHARPNESS_RANGE,
@@ -446,26 +601,45 @@ uint32_t qcamera3_all_tags[] = {
     (uint32_t)QCAMERA3_STATS_GAZE_DIRECTION,
     (uint32_t)QCAMERA3_STATS_GAZE_DEGREE,
 
-    // QCAMERA3_SIMULTANEOUS_CAMERA
-    (uint32_t)QCAMERA3_SIMULTANEOUS_CAMERA_VFE1_RESERVED_RDI,
-
-    // QCAMERA3_QUADRA_CFA_DATA
-    (uint32_t)QCAMERA3_IS_QUADRA_CFA_SENSOR,
-    (uint32_t)QCAMERA3_SUPPORT_QUADRA_CFA_DIM,
-
-    //QCAMERA3_HFR
-    (uint32_t)QCAMERA3_HFR_SIZES,
-
-    //QCAMERA3_BOKEH
-    (uint32_t)QCAMERA3_BOKEH_ENABLE,
-    (uint32_t)QCAMERA3_BOKEH_BLURLEVEL,
-    (uint32_t)QCAMERA3_BOKEH_STATUS,
-
-    //QCAMERA3_FUSION
-    (uint32_t)QCAMERA3_FUSION_STATUS,
-
-    //QCAMERA3_LOGICAL_CAM
-    (uint32_t)QCAMERA3_LOGICAL_CAM_MODE
+    //NEXUS_EXPERIMENTAL_2017
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_HISTOGRAM_ENABLE,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_HISTOGRAM_SUPPORTED_BINS,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_HISTOGRAM_BINS,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_HISTOGRAM,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_EEPROM_VERSION_INFO,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_EEPROM_PDAF_CALIB_RIGHT_GAINS,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_EEPROM_PDAF_CALIB_LEFT_GAINS,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_EEPROM_PDAF_CALIB_CONV_COEFF,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_EEPROM_WB_CALIB_NUM_LIGHTS,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_EEPROM_WB_CALIB_R_OVER_G_RATIOS,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_EEPROM_WB_CALIB_B_OVER_G_RATIOS,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_EEPROM_WB_CALIB_GR_OVER_GB_RATIO,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_TRACKING_AF_TRIGGER,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_AF_REGIONS_CONFIDENCE,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_OIS_FRAME_TIMESTAMP_VSYNC,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_OIS_FRAME_TIMESTAMP_BOOTTIME,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_OIS_TIMESTAMPS_BOOTTIME,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_OIS_SHIFT_X,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_OIS_SHIFT_Y,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_OIS_SHIFT_PIXEL_X,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_OIS_SHIFT_PIXEL_Y,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_PD_DATA_DIMENSIONS,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_PD_DATA_ENABLE,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_EXP_TIME_BOOST,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_EXIF_MAKERNOTE,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_NEXT_STILL_INTENT_REQUEST_READY,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_POSTVIEW,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_POSTVIEW_CONFIG,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_POSTVIEW_DATA,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_CONTINUOUS_ZSL_CAPTURE,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_DISABLE_HDRPLUS,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_SCENE_DISTANCE,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_MOTION_DETECTION_ENABLE,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_CAMERA_MOTION_X,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_CAMERA_MOTION_Y,
+    (uint32_t)NEXUS_EXPERIMENTAL_2017_SUBJECT_MOTION,
+    //TANGO_MODE
+    (uint32_t)TANGO_MODE_DATA_SENSOR_FULLFOV,
 };
 
 const vendor_tag_ops_t* QCamera3VendorTags::Ops = NULL;
@@ -574,10 +748,12 @@ const char* QCamera3VendorTags::get_section_name(
     const char *ret;
     uint32_t section = tag >> 16;
 
-    if (section < VENDOR_SECTION || section >= QCAMERA3_SECTIONS_END)
-        ret = NULL;
-    else
+    if (section >= VENDOR_SECTION && section < QCAMERA3_SECTIONS_END)
         ret = qcamera3_ext_section_names[section - VENDOR_SECTION];
+    else if (section >= TANGO_SECTIONS_START && section < TANGO_SECTIONS_END)
+        ret = tango_section_names[section - TANGO_SECTIONS_START];
+    else
+        ret = NULL;
 
     if (ret)
         LOGL("section_name[%d] is %s", tag, ret);
@@ -612,12 +788,14 @@ const char* QCamera3VendorTags::get_tag_name(
         goto done;
     }
 
-    if (section < VENDOR_SECTION || section >= QCAMERA3_SECTIONS_END)
-        ret = NULL;
-    else if (tag >= (uint32_t)qcamera3_ext3_section_bounds[section_index])
-        ret = NULL;
-    else
+    if (section >= VENDOR_SECTION && section < QCAMERA3_SECTIONS_END &&
+        tag < (uint32_t)qcamera3_ext3_section_bounds[section_index])
         ret = qcamera3_tag_info[section_index][tag_index].tag_name;
+    else if (section >= TANGO_SECTIONS_START && section < TANGO_SECTIONS_END &&
+        tag < (uint32_t)tango_section_bounds[section - TANGO_SECTIONS_START])
+        ret = tango_tag_info[section - TANGO_SECTIONS_START][tag_index].tag_name;
+    else
+        ret = NULL;
 
     if (ret)
         LOGL("tag name for tag %d is %s", tag, ret);
@@ -653,12 +831,14 @@ int QCamera3VendorTags::get_tag_type(
         ret = -1;
         goto done;
     }
-    if (section < VENDOR_SECTION || section >= QCAMERA3_SECTIONS_END)
-        ret = -1;
-    else if (tag >= (uint32_t )qcamera3_ext3_section_bounds[section_index])
-        ret = -1;
-    else
+    if (section >= VENDOR_SECTION && section < QCAMERA3_SECTIONS_END &&
+        tag < (uint32_t)qcamera3_ext3_section_bounds[section_index])
         ret = qcamera3_tag_info[section_index][tag_index].tag_type;
+    else if (section >= TANGO_SECTIONS_START && section < TANGO_SECTIONS_END &&
+        tag < (uint32_t)tango_section_bounds[section - TANGO_SECTIONS_START])
+        ret = tango_tag_info[section - TANGO_SECTIONS_START][tag_index].tag_type;
+    else
+        ret = NULL;
 
     LOGL("tag type for tag %d is %d", tag, ret);
     LOGL("X");

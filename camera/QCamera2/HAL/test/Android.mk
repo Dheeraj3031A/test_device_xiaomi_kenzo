@@ -30,17 +30,24 @@ LOCAL_CFLAGS += -DUSE_JB_MR1
 endif
 
 LOCAL_C_INCLUDES += \
+    frameworks/base/include/ui \
+    frameworks/base/include/surfaceflinger \
+    frameworks/base/include/camera \
+    frameworks/base/include/media \
     external/skia/include/core \
     external/skia/include/images \
-    $(LOCAL_PATH)/QCamera2/stack/common \
-    $(LOCAL_PATH)/QCamera2/stack/mm-camera-interface/inc
+    $(TARGET_OUT_HEADERS)/qcom/display \
+    $(SRC_CAMERA_HAL_DIR)/QCamera2/stack/common \
+    $(SRC_CAMERA_HAL_DIR)/QCamera2/stack/mm-camera-interface/inc \
+    frameworks/av/include/media/stagefright \
+    frameworks/native/include/media/openmax \
+    $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include
 
-LOCAL_HEADER_LIBRARIES := generated_kernel_headers
-LOCAL_HEADER_LIBRARIES += display_headers
+LOCAL_ADDITIONAL_DEPENDENCIES := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr
 
 LOCAL_MODULE:= camera_test
-LOCAL_VENDOR_MODULE := true
-include $(SDCLANG_COMMON_DEFS)
+LOCAL_LICENSE_KINDS:= SPDX-license-identifier-BSD
+LOCAL_LICENSE_CONDITIONS:= notice
 LOCAL_MODULE_TAGS:= tests
 
 LOCAL_CFLAGS += -Wall -Wextra -Werror -Wno-unused-parameter
@@ -50,7 +57,9 @@ ifeq (1,$(filter 1,$(shell echo "$$(( $(PLATFORM_SDK_VERSION) >= 20 ))" )))
 
 LOCAL_CFLAGS += -DUSE_SDK_20_OR_HIGHER
 
+ifeq ($(TARGET_USES_AOSP),true)
 LOCAL_CFLAGS += -DVANILLA_HAL
+endif
 
 endif
 

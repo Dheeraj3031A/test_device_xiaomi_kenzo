@@ -1,4 +1,4 @@
-/* Copyright (c) 2015-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2015-2016, The Linux Foundation. All rights reserved.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions are
@@ -37,18 +37,81 @@
 #include <stdlib.h>
 #include <dlfcn.h>
 #include <utils/Timers.h>
+
+#include <aidl/android/hardware/power/Boost.h>
+#include <aidl/android/hardware/power/IPower.h>
+#include <aidl/android/hardware/power/Mode.h>
+#include <android/binder_manager.h>
+#include <android-base/properties.h>
+
 // Camera dependencies
 #include "QCameraPerf.h"
 #include "QCameraTrace.h"
-#include "QCameraCommon.h"
-
-#include <android-base/properties.h>
 
 extern "C" {
 #include "mm_camera_dbg.h"
 }
 
 namespace qcamera {
+
+using aidl::android::hardware::power::Boost;
+using aidl::android::hardware::power::Mode;
+
+// Protect gPowerHal_1_2_ and gPowerHal_Aidl_
+static android::sp<android::hardware::power::V1_2::IPower> gPowerHal_1_2_ = nullptr;
+static std::shared_ptr<aidl::android::hardware::power::IPower> gPowerHal_Aidl_ = nullptr;
+static std::mutex gPowerHalMutex;
+static const std::string kInstance =
+    std::string() + aidl::android::hardware::power::IPower::descriptor + "/default";
+
+namespace {
+    constexpr int kDefaultBoostDurationMs = 1000;
+    constexpr int kDisableBoostDurationMs = -1;
+}
+
+enum hal_version {
+    NONE,
+    HIDL_1_2,
+    AIDL,
+};
+
+// Connnect PowerHAL
+static hal_version connectPowerHalLocked() {
+    static bool gPowerHalHidlExists = true;
+    static bool gPowerHalAidlExists = true;
+
+    if (!gPowerHalHidlExists && !gPowerHalAidlExists) {
+        return NONE;
+    }
+
+    if (gPowerHalHidlExists) {
+        if (!gPowerHal_1_2_) {
+            gPowerHal_1_2_ =
+                    android::hardware::power::V1_2::IPower::getService();
+        }
+        if (gPowerHal_1_2_) {
+            ALOGV("Successfully connected to Power Hal Hidl service.");
+            return HIDL_1_2;
+        } else {
+            gPowerHalHidlExists = false;
+        }
+    }
+
+    if (gPowerHalAidlExists) {
+        if (!gPowerHal_Aidl_) {
+            ndk::SpAIBinder pwBinder = ndk::SpAIBinder(AServiceManager_getService(kInstance.c_str()));
+            gPowerHal_Aidl_ = aidl::android::hardware::power::IPower::fromBinder(pwBinder);
+        }
+        if (gPowerHal_Aidl_) {
+            ALOGV("Successfully connected to Power Hal Aidl service.");
+            return AIDL;
+        } else {
+            gPowerHalAidlExists = false;
+        }
+    }
+
+    return NONE;
+}
 
 typedef enum {
     MPCTLV3_MIN_FREQ_CLUSTER_BIG_CORE_0     = 0x40800000,
@@ -74,15 +137,13 @@ typedef enum {
     MPCTLV3_MAX_ONLINE_CPU_CLUSTER_BIG      = 0x41004000,
     MPCTLV3_MAX_ONLINE_CPU_CLUSTER_LITTLE   = 0x41004100,
 
-    MPCTLV3_ALL_CPUS_PWR_CLPS_DIS           = 0x40400000
+    MPCTLV3_ALL_CPUS_PWR_CLPS_DIS           = 0x40400000,
+    MPCTLV3_CPUBW_HWMON_MIN_FREQ            = 0x41800000,
+    MPCTLV3_CPUBW_HWMON_HYST_OPT            = 0x4180C000
 } perf_lock_params;
 
+
 static int32_t perfLockParamsOpenCamera[] = {
-    #ifndef TARGET_MSM8996
-    // Make sure big cluster is online
-    MPCTLV3_MIN_ONLINE_CPU_CLUSTER_BIG,     0x4,
-    MPCTLV3_MAX_ONLINE_CPU_CLUSTER_BIG,     0x4,
-    #endif
     // Disable power collapse and set CPU cloks to turbo
     MPCTLV3_ALL_CPUS_PWR_CLPS_DIS,          0x1,
     MPCTLV3_MAX_FREQ_CLUSTER_BIG_CORE_0,    0xFFF,
@@ -92,11 +153,6 @@ static int32_t perfLockParamsOpenCamera[] = {
 };
 
 static int32_t perfLockParamsCloseCamera[] = {
-    #ifndef TARGET_MSM8996
-    // Make sure big cluster is online
-    MPCTLV3_MIN_ONLINE_CPU_CLUSTER_BIG,     0x4,
-    MPCTLV3_MAX_ONLINE_CPU_CLUSTER_BIG,     0x4,
-    #endif
     // Disable power collapse and set CPU cloks to turbo
     MPCTLV3_ALL_CPUS_PWR_CLPS_DIS,          0x1,
     MPCTLV3_MAX_FREQ_CLUSTER_BIG_CORE_0,    0xFFF,
@@ -106,11 +162,6 @@ static int32_t perfLockParamsCloseCamera[] = {
 };
 
 static int32_t perfLockParamsStartPreview[] = {
-    #ifndef TARGET_MSM8996
-    // Make sure big cluster is online
-    MPCTLV3_MIN_ONLINE_CPU_CLUSTER_BIG,     0x4,
-    MPCTLV3_MAX_ONLINE_CPU_CLUSTER_BIG,     0x4,
-    #endif
     // Disable power collapse and set CPU cloks to turbo
     MPCTLV3_ALL_CPUS_PWR_CLPS_DIS,          0x1,
     MPCTLV3_MAX_FREQ_CLUSTER_BIG_CORE_0,    0xFFF,
@@ -120,92 +171,14 @@ static int32_t perfLockParamsStartPreview[] = {
 };
 
 static int32_t perfLockParamsTakeSnapshot[] = {
-    // Disable power collapse
+    // Disable power collapse and set CPU cloks to turbo
     MPCTLV3_ALL_CPUS_PWR_CLPS_DIS,          0x1,
-    #ifdef TARGET_MSM8996
-    // Set little cluster and big cluster cores to 1.555 GHz
-    MPCTLV3_MIN_FREQ_CLUSTER_LITTLE_CORE_0, 0x613,
-    MPCTLV3_MIN_FREQ_CLUSTER_LITTLE_CORE_1, 0x613,
-    MPCTLV3_MAX_FREQ_CLUSTER_LITTLE_CORE_0, 0x613,
-    MPCTLV3_MAX_FREQ_CLUSTER_LITTLE_CORE_1, 0x613,
-    MPCTLV3_MIN_FREQ_CLUSTER_BIG_CORE_0,    0x613,
-    MPCTLV3_MIN_FREQ_CLUSTER_BIG_CORE_1,    0x613,
-    MPCTLV3_MAX_FREQ_CLUSTER_BIG_CORE_0,    0x613,
-    MPCTLV3_MAX_FREQ_CLUSTER_BIG_CORE_1,    0x613
-    #else
-    // Set little cluster cores to 1.555 GHz
-    MPCTLV3_MIN_FREQ_CLUSTER_LITTLE_CORE_0, 0x613,
-    MPCTLV3_MIN_FREQ_CLUSTER_LITTLE_CORE_1, 0x613,
-    MPCTLV3_MIN_FREQ_CLUSTER_LITTLE_CORE_2, 0x613,
-    MPCTLV3_MIN_FREQ_CLUSTER_LITTLE_CORE_3, 0x613,
-    MPCTLV3_MAX_FREQ_CLUSTER_LITTLE_CORE_0, 0x613,
-    MPCTLV3_MAX_FREQ_CLUSTER_LITTLE_CORE_1, 0x613,
-    MPCTLV3_MAX_FREQ_CLUSTER_LITTLE_CORE_2, 0x613,
-    MPCTLV3_MAX_FREQ_CLUSTER_LITTLE_CORE_3, 0x613,
-    // Set big cluster offline
-    MPCTLV3_MAX_ONLINE_CPU_CLUSTER_BIG,     0x0
-    #endif
-};
-
-static int32_t perfLockParamsTakeSnapshotSDM429[] = {
-    // Disable power collapse
-    MPCTLV3_ALL_CPUS_PWR_CLPS_DIS,          0x1,
-    // Set little cluster cores to 1.555 GHz
-    MPCTLV3_MIN_FREQ_CLUSTER_LITTLE_CORE_0, 0x613,
-    MPCTLV3_MIN_FREQ_CLUSTER_LITTLE_CORE_1, 0x613,
-    MPCTLV3_MIN_FREQ_CLUSTER_LITTLE_CORE_2, 0x613,
-    MPCTLV3_MIN_FREQ_CLUSTER_LITTLE_CORE_3, 0x613,
-    MPCTLV3_MAX_FREQ_CLUSTER_LITTLE_CORE_0, 0x613,
-    MPCTLV3_MAX_FREQ_CLUSTER_LITTLE_CORE_1, 0x613,
-    MPCTLV3_MAX_FREQ_CLUSTER_LITTLE_CORE_2, 0x613,
-    MPCTLV3_MAX_FREQ_CLUSTER_LITTLE_CORE_3, 0x613,
-    // Set big cluster offline
-    MPCTLV3_MAX_ONLINE_CPU_CLUSTER_BIG,     0x4
-};
-
-static int32_t perfLockParamsTakeSnapshotQM215[] = {
-    // Disable power collapse
-    MPCTLV3_ALL_CPUS_PWR_CLPS_DIS,          0x1,
-    MPCTLV3_MIN_FREQ_CLUSTER_BIG_CORE_0,    0x613,
-    MPCTLV3_MIN_ONLINE_CPU_CLUSTER_BIG,     0x4
-};
-
-static int32_t perfLockParamsTakeSnapshotQM2150[] = {
-    // Disable power collapse
-    MPCTLV3_ALL_CPUS_PWR_CLPS_DIS,          0x1,
-    MPCTLV3_MIN_FREQ_CLUSTER_BIG_CORE_0,    0x613,
-    MPCTLV3_MIN_ONLINE_CPU_CLUSTER_BIG,     0x4
-};
-
-static int32_t perfLockParamsBokehSnapshot[] = {
-    #ifndef TARGET_MSM8996
-    // Make sure big cluster is online
-    MPCTLV3_MIN_ONLINE_CPU_CLUSTER_BIG,     0x4,
-    MPCTLV3_MAX_ONLINE_CPU_CLUSTER_BIG,     0x4,
-    #endif
-
-    // Disable power collapse
-    MPCTLV3_ALL_CPUS_PWR_CLPS_DIS,          0x1,
-    // Set little cluster cores to turbo
-    MPCTLV3_MIN_FREQ_CLUSTER_LITTLE_CORE_0, 0xFFF,
+    MPCTLV3_MAX_FREQ_CLUSTER_BIG_CORE_0,    0xFFF,
+    MPCTLV3_MIN_FREQ_CLUSTER_BIG_CORE_0,    0xFFF,
     MPCTLV3_MAX_FREQ_CLUSTER_LITTLE_CORE_0, 0xFFF,
-
-    // Set big cluster cores to turbo
-    MPCTLV3_MIN_FREQ_CLUSTER_BIG_CORE_0, 0xFFF,
-    MPCTLV3_MAX_FREQ_CLUSTER_BIG_CORE_0, 0xFFF
-};
-
-
-static int32_t perfLockParamsTakeSnapshotsdm630[] = {
-    MPCTLV3_MIN_FREQ_CLUSTER_BIG_CORE_0, 0x613,
-    MPCTLV3_MIN_FREQ_CLUSTER_BIG_CORE_1, 0x613,
-    MPCTLV3_MIN_FREQ_CLUSTER_BIG_CORE_2, 0x613,
-    MPCTLV3_MIN_FREQ_CLUSTER_BIG_CORE_3, 0x613,
-    MPCTLV3_MAX_FREQ_CLUSTER_BIG_CORE_0, 0x613,
-    MPCTLV3_MAX_FREQ_CLUSTER_BIG_CORE_1, 0x613,
-    MPCTLV3_MAX_FREQ_CLUSTER_BIG_CORE_2, 0x613,
-    MPCTLV3_MAX_FREQ_CLUSTER_BIG_CORE_3, 0x613,
-    MPCTLV3_MAX_ONLINE_CPU_CLUSTER_LITTLE,     0x0
+    MPCTLV3_MIN_FREQ_CLUSTER_LITTLE_CORE_0, 0xFFF,
+    MPCTLV3_CPUBW_HWMON_HYST_OPT,           0x0,
+    MPCTLV3_CPUBW_HWMON_MIN_FREQ,           0x8C
 };
 
 PerfLockInfo QCameraPerfLock::mPerfLockInfo[] = {
@@ -224,10 +197,7 @@ PerfLockInfo QCameraPerfLock::mPerfLockInfo[] = {
     { //PERF_LOCK_POWERHINT_PREVIEW
       NULL, 0},
     { //PERF_LOCK_POWERHINT_ENCODE
-      NULL, 0},
-    { //PERF_LOCK_BOKEH_SNAPSHOT
-      perfLockParamsBokehSnapshot,
-      sizeof(perfLockParamsBokehSnapshot)/sizeof(int32_t) },
+      NULL, 0}
     };
 
 Mutex                QCameraPerfLockIntf::mMutex;
@@ -374,12 +344,12 @@ bool QCameraPerfLockMgr::releasePerfLock(
  *==========================================================================*/
 void QCameraPerfLockMgr::powerHintInternal(
         PerfLockEnum perfLockType,
-        power_hint_t powerHint,
-        bool         enable)
+        PowerHint    powerHint,
+        int32_t      time_out)
 {
     if ((mState == LOCK_MGR_STATE_READY) &&
         isValidPerfLockEnum(perfLockType)) {
-        mPerfLock[perfLockType]->powerHintInternal(powerHint, enable);
+        mPerfLock[perfLockType]->powerHintInternal(powerHint, time_out);
     }
 }
 
@@ -406,30 +376,6 @@ QCameraPerfLock* QCameraPerfLock::create(
         QCameraPerfLockIntf *perfLockIntf = QCameraPerfLockIntf::createSingleton();
         if (perfLockIntf) {
             perfLock = new QCameraPerfLock(perfLockType, perfLockIntf);
-            if ((perfLockType == PERF_LOCK_TAKE_SNAPSHOT) && (QCameraCommon::is_target_SDM630())) {
-                memcpy (perfLockParamsTakeSnapshot,perfLockParamsTakeSnapshotsdm630,
-                        sizeof(perfLockParamsTakeSnapshotsdm630));
-                mPerfLockInfo[perfLockType].perfLockParamsCount =
-                sizeof(perfLockParamsTakeSnapshotsdm630)/sizeof(int32_t);
-            } else if((perfLockType == PERF_LOCK_TAKE_SNAPSHOT) &&
-                       (QCameraCommon::is_target_QM215())) {
-                memcpy (perfLockParamsTakeSnapshot,perfLockParamsTakeSnapshotQM215,
-                        sizeof(perfLockParamsTakeSnapshotQM215));
-                mPerfLockInfo[perfLockType].perfLockParamsCount =
-                sizeof(perfLockParamsTakeSnapshotQM215)/sizeof(int32_t);
-            } else if((perfLockType == PERF_LOCK_TAKE_SNAPSHOT) &&
-                       (QCameraCommon::is_target_QM2150())) {
-                memcpy (perfLockParamsTakeSnapshot,perfLockParamsTakeSnapshotQM2150,
-                        sizeof(perfLockParamsTakeSnapshotQM2150));
-                mPerfLockInfo[perfLockType].perfLockParamsCount =
-                sizeof(perfLockParamsTakeSnapshotQM2150)/sizeof(int32_t);
-           } else if ((perfLockType == PERF_LOCK_TAKE_SNAPSHOT) &&
-                       (QCameraCommon::is_target_SDM429())) {
-                memcpy (perfLockParamsTakeSnapshot,perfLockParamsTakeSnapshotSDM429,
-                        sizeof(perfLockParamsTakeSnapshotSDM429));
-                mPerfLockInfo[perfLockType].perfLockParamsCount =
-                sizeof(perfLockParamsTakeSnapshotSDM429)/sizeof(int32_t);
-           }
         }
     }
     return perfLock;
@@ -451,7 +397,6 @@ QCameraPerfLock::QCameraPerfLock(
         QCameraPerfLockIntf *perfLockIntf) :
         mHandle(0),
         mRefCount(0),
-        mEnable(false),
         mTimeOut(0),
         mPerfLockType(perfLockType),
         mPerfLockIntf(perfLockIntf)
@@ -540,10 +485,24 @@ bool QCameraPerfLock::acquirePerfLock(
     bool ret = true;
     Mutex::Autolock lock(mMutex);
 
-    if ((mPerfLockType == PERF_LOCK_POWERHINT_PREVIEW) ||
-        (mPerfLockType == PERF_LOCK_POWERHINT_ENCODE)) {
-        powerHintInternal(POWER_HINT_VIDEO_ENCODE, true);
-        return true;
+    switch (mPerfLockType) {
+        case PERF_LOCK_POWERHINT_PREVIEW:
+        case PERF_LOCK_POWERHINT_ENCODE:
+            powerHintInternal(PowerHint::CAMERA_STREAMING, true);
+            return true;
+        case PERF_LOCK_OPEN_CAMERA:
+        case PERF_LOCK_CLOSE_CAMERA:
+            powerHintInternal(PowerHint::CAMERA_LAUNCH, timer);
+            return true;
+        case PERF_LOCK_START_PREVIEW:
+            powerHintInternal(PowerHint::CAMERA_SHOT, timer);
+            return true;
+        case PERF_LOCK_TAKE_SNAPSHOT:
+            powerHintInternal(PowerHint::CAMERA_SHOT, timer);
+            return true;
+        default:
+            LOGE("Unknown powerhint %d",(int)mPerfLockType);
+            return false;
     }
 
     if (!mIsPerfdEnabled) return ret;
@@ -576,7 +535,6 @@ bool QCameraPerfLock::acquirePerfLock(
 }
 
 
-
 /*===========================================================================
  * FUNCTION   : releasePerfLock
  *
@@ -593,10 +551,24 @@ bool QCameraPerfLock::releasePerfLock()
     bool ret = true;
     Mutex::Autolock lock(mMutex);
 
-    if ((mPerfLockType == PERF_LOCK_POWERHINT_PREVIEW) ||
-        (mPerfLockType == PERF_LOCK_POWERHINT_ENCODE)) {
-        powerHintInternal(POWER_HINT_VIDEO_ENCODE, false);
-        return true;
+    switch (mPerfLockType) {
+        case PERF_LOCK_POWERHINT_PREVIEW:
+        case PERF_LOCK_POWERHINT_ENCODE:
+            powerHintInternal(PowerHint::CAMERA_STREAMING, false);
+            return true;
+        case PERF_LOCK_OPEN_CAMERA:
+        case PERF_LOCK_CLOSE_CAMERA:
+            powerHintInternal(PowerHint::CAMERA_LAUNCH, false);
+            return true;
+        case PERF_LOCK_START_PREVIEW:
+            powerHintInternal(PowerHint::CAMERA_SHOT, false);
+            return true;
+        case PERF_LOCK_TAKE_SNAPSHOT:
+            powerHintInternal(PowerHint::CAMERA_SHOT, false);
+            return true;
+        default:
+            LOGE("Unknown powerhint %d",(int)mPerfLockType);
+            return false;
     }
 
     if (!mIsPerfdEnabled) return ret;
@@ -638,19 +610,13 @@ bool QCameraPerfLock::releasePerfLock()
  *
  *==========================================================================*/
 void QCameraPerfLock::powerHintInternal(
-        power_hint_t powerHint,
-        bool         enable)
+        PowerHint    powerHint,
+        int32_t      time_out)
 {
 #ifdef HAS_MULTIMEDIA_HINTS
-        if ((enable == true) && !(mEnable)) {
-            mEnable = true;
-            mPerfLockIntf->powerHintIntf()->powerHint(mPerfLockIntf->powerHintIntf(),
-                                                    powerHint, (void *)"state=1");
-        } else if ((enable == false) && (mEnable)) {
-            mEnable = false;
-            mPerfLockIntf->powerHintIntf()->powerHint(mPerfLockIntf->powerHintIntf(),
-                                                    powerHint, (void *)"state=0");
-        }
+    if (!mPerfLockIntf->powerHint(powerHint, time_out)) {
+        LOGE("Send powerhint to PowerHal failed");
+    }
 #endif
 }
 
@@ -678,19 +644,20 @@ QCameraPerfLockIntf* QCameraPerfLockIntf::createSingleton()
         uint32_t perfLockEnable = 0;
         char value[PROPERTY_VALUE_MAX];
 
-        property_get("persist.vendor.camera.perflock.enable", value, "1");
+        property_get("persist.camera.perflock.enable", value, "1");
         perfLockEnable = atoi(value);
 
         if (perfLockEnable) {
             mInstance = new QCameraPerfLockIntf();
             if (mInstance) {
                 #ifdef HAS_MULTIMEDIA_HINTS
-                if (hw_get_module(POWER_HARDWARE_MODULE_ID,
-                        (const hw_module_t **)(&(mInstance->mPowerModule)))) {
-                    LOGE("%s module for powerHAL not found", POWER_HARDWARE_MODULE_ID);
+                std::lock_guard<std::mutex> lock(gPowerHalMutex);
+                if (connectPowerHalLocked() == NONE) {
+                    ALOGE("Couldn't load PowerHAL module");
+                } else {
+                    error = false;
                 }
-                else
-                #endif
+                #else
                 {
                     /* Retrieve the name of the vendor extension library */
                     void *dlHandle = NULL;
@@ -707,11 +674,19 @@ QCameraPerfLockIntf* QCameraPerfLockIntf::createSingleton()
                             error = false;
                         } else {
                             LOGE("Failed to link the symbols- perf_lock_acq, perf_lock_rel");
+                            bool IsPerfdEnabled = android::base::GetBoolProperty("persist.camera.perfd.enable", false);
+                            if (!IsPerfdEnabled) {
+                                mInstance->mDlHandle    = nullptr;
+                                mInstance->mPerfLockAcq = nullptr;
+                                mInstance->mPerfLockRel = nullptr;
+                                error = false;
+                            }
                         }
                     } else {
                         LOGE("Unable to load lib: %s", value);
                     }
                 }
+                #endif
                 if (error && mInstance) {
                     delete mInstance;
                     mInstance = NULL;
@@ -763,6 +738,45 @@ QCameraPerfLockIntf::~QCameraPerfLockIntf()
 {
     if (mDlHandle) {
         dlclose(mDlHandle);
+    }
+}
+
+bool QCameraPerfLockIntf::powerHint(PowerHint hint, int32_t data) {
+    std::lock_guard<std::mutex> lock(gPowerHalMutex);
+    switch(connectPowerHalLocked()) {
+        case NONE:
+            return false;
+        case HIDL_1_2:
+            {
+              auto ret = gPowerHal_1_2_->powerHintAsync_1_2(hint, data);
+                if (!ret.isOk()) {
+                    ALOGE("powerHint failed, error: %s",
+                          ret.description().c_str());
+                    gPowerHal_1_2_ = nullptr;
+                }
+                return ret.isOk();
+            }
+        case AIDL:
+            {
+                bool ret = false;
+                if (hint == PowerHint::CAMERA_LAUNCH) {
+                    int32_t durationMs = data ? kDefaultBoostDurationMs : kDisableBoostDurationMs;
+                    ret = gPowerHal_Aidl_->setBoost(Boost::CAMERA_LAUNCH, durationMs).isOk();
+                } else if (hint == PowerHint::CAMERA_SHOT) {
+                    ret = gPowerHal_Aidl_->setBoost(Boost::CAMERA_SHOT, data).isOk();
+                } else if (hint == PowerHint::CAMERA_STREAMING) {
+                    // Only CAMERA_STREAMING_MID is used
+                    ret = gPowerHal_Aidl_->setMode(Mode::CAMERA_STREAMING_MID, static_cast<bool>(data)).isOk();
+                }
+                if (!ret) {
+                    ALOGE("Failed to set power hint: %s.", toString(hint).c_str());
+                    gPowerHal_Aidl_ = nullptr;
+                }
+                return ret;
+            }
+        default:
+            ALOGE("Unknown HAL state");
+            return false;
     }
 }
 

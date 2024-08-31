@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2016, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -97,8 +97,8 @@ const char CameraContext::KEY_ZSL[] = "zsl";
  *==========================================================================*/
 void CameraContext::previewCallback(const sp<IMemory>& mem)
 {
-    printf("PREVIEW Callback %p", mem->pointer());
-    uint8_t *ptr = (uint8_t*) mem->pointer();
+    printf("PREVIEW Callback %p", mem->unsecurePointer());
+    uint8_t *ptr = (uint8_t*) mem->unsecurePointer();
     if (NULL != ptr) {
         printf("PRV_CB: 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x",
                 ptr[0],
@@ -186,7 +186,7 @@ status_t CameraContext::saveFile(const sp<IMemory>& mem, String8 path)
         return BAD_VALUE;
     }
 
-    buff = (unsigned char *)mem->pointer();
+    buff = (unsigned char *)mem->unsecurePointer();
     if (!buff) {
         printf("Buffer pointer is invalid\n");
         close(fd);
@@ -289,7 +289,7 @@ status_t CameraContext::decodeJPEG(const sp<IMemory>& mem, SkBitmap *skBM)
     const void *buff = NULL;
     size_t size;
 
-    buff = (const void *)mem->pointer();
+    buff = (const void *)mem->unsecurePointer();
     size= mem->size();
 
     switch(prefConfig) {
@@ -341,7 +341,7 @@ status_t CameraContext::decodeJPEG(const sp<IMemory>& mem, SkBitmap *skBM)
     const void *buff = NULL;
     size_t size;
 
-    buff = (const void *)mem->pointer();
+    buff = (const void *)mem->unsecurePointer();
     size= mem->size();
 
     switch(prefConfig) {
@@ -366,12 +366,6 @@ status_t CameraContext::decodeJPEG(const sp<IMemory>& mem, SkBitmap *skBM)
         case kRGB_565_SkColorType:
         {
             mfmtMultiplier = 2;
-        }
-        break;
-
-        case kIndex_8_SkColorType:
-        {
-            mfmtMultiplier = 4;
         }
         break;
 
@@ -419,13 +413,8 @@ status_t CameraContext::encodeJPEG(SkWStream * stream,
 {
     int qFactor = 100;
 
-    skJpegEnc = SkImageEncoder::Create(SkImageEncoder::kJPEG_Type);
-    if (!skJpegEnc) {
-        ALOGE(" skJpegEnc is NULL\n");
-        return BAD_VALUE;
-    }
-
-    if (skJpegEnc->encodeStream(stream, *bitmap, qFactor) == false) {
+    if (!SkEncodeImage(stream, *bitmap, SkEncodedImageFormat::kJPEG, qFactor)) {
+        ALOGE(" SkEncodeImage failed\n");
         return BAD_VALUE;
     }
 
@@ -934,11 +923,11 @@ void CameraContext::postData(int32_t msgType,
                 // its jpeg sections
                 if ((mInterpr->camera[0]->mWidthTmp * mInterpr->camera[0]->mHeightTmp) >
                         (mInterpr->camera[1]->mWidthTmp * mInterpr->camera[1]->mHeightTmp)) {
-                    buff = (unsigned char *)PiPPtrTmp->pointer();
+                    buff = (unsigned char *)PiPPtrTmp->unsecurePointer();
                     size= PiPPtrTmp->size();
                 } else if ((mInterpr->camera[0]->mWidthTmp * mInterpr->camera[0]->mHeightTmp) <
                         (mInterpr->camera[1]->mWidthTmp * mInterpr->camera[1]->mHeightTmp)) {
-                    buff = (unsigned char *)PiPPtrTmp->pointer();
+                    buff = (unsigned char *)PiPPtrTmp->unsecurePointer();
                     size= PiPPtrTmp->size();
                 } else {
                     printf("Cannot take PiP. Images are with the same width"
@@ -1068,7 +1057,7 @@ void CameraContext::dataCallbackTimestamp(nsecs_t timestamp,
     status_t err = NO_ERROR;
     ANativeWindowBuffer* anb = NULL;
 
-    dstBuff = (void *) dataPtr->pointer();
+    dstBuff = (void *) dataPtr->unsecurePointer();
     if (NULL == dstBuff) {
         printf("Cannot access destination buffer!!!\n");
         mInterpr->ViVUnlock();
@@ -1515,8 +1504,7 @@ status_t CameraContext::createPreviewSurface(int width, int height, int32_t pixF
 {
     int ret = NO_ERROR;
     DisplayInfo dinfo;
-    sp<IBinder> display(SurfaceComposerClient::getBuiltInDisplay(
-                        ISurfaceComposer::eDisplayIdMain));
+    sp<IBinder> display = SurfaceComposerClient::getInternalDisplayToken();
     SurfaceComposerClient::getDisplayInfo(display, &dinfo);
     uint32_t previewWidth, previewHeight;
 
@@ -1901,7 +1889,7 @@ status_t CameraContext::startPreview()
         // set rdi mode if system prop is set for front camera
         if (mCameraIndex == 1) {
             char value[32];
-            property_get("persist.vendor.camera.rdimode", value, "0");
+            property_get("persist.camera.rdimode", value, "0");
             int rdimode = atoi(value);
             printf("rdi mode = %d\n", rdimode);
             if (rdimode == 1) {

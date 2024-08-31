@@ -135,7 +135,8 @@ int32_t QCameraExtZoomTranslator::init(
  *
  * PARAMETERS :
  *@userZoom   : User zoom (zoom index into the zoom table)
- *@zoomData   : Zoom for wide and tele cameras (zoom index into the zoom table)
+ *@wideZoom   : Zoom for wide camera (zoom index into the zoom table)
+ *@teleZoom   : Zoom for tele camera (zoom index into the zoom table)
  *
  * RETURN     :
  * NO_ERROR           : Success
@@ -143,8 +144,9 @@ int32_t QCameraExtZoomTranslator::init(
  *
  *==========================================================================*/
 int32_t QCameraExtZoomTranslator::getZoomValues(
-        __unused uint32_t   userZoom,
-        __unused zoom_data *zoomData)
+        __unused uint32_t  userZoom,
+        __unused uint32_t *wideZoom,
+        __unused uint32_t *teleZoom)
 {
     int32_t rc = INVALID_OPERATION;
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2016, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -32,7 +32,6 @@
 
 // Camera dependencies
 #include "QCamera2HWI.h"
-#include "QCameraPprocManager.h"
 
 extern "C" {
 #include "mm_camera_interface.h"
@@ -47,7 +46,7 @@ namespace qcamera {
 
 class QCameraExif;
 class QCamera2HardwareInterface;
-class QCameraHALPPManager;
+class QCameraHALPP;
 
 typedef struct {
     uint32_t jobId;                  // job ID
@@ -91,6 +90,24 @@ typedef struct {
 } qcamera_pp_data_t;
 
 typedef struct {
+    mm_camera_super_buf_t *frame; // source frame
+    mm_camera_buf_def_t   *bufs;  // source buf_defs
+    uint32_t frameIndex;          // source frame index
+    bool halPPAllocatedBuf;       // true if src frame buffer is allocated by HAL PP block
+    QCameraHeapMemory    *snapshot_heap;    // output image heap buffer
+    QCameraHeapMemory    *metadata_heap;    // metadata heap buffer
+
+    /* buffer in qcamera_pp_data_t need to be release when done */
+    bool reproc_frame_release;       // false release original buffer
+                                     // true don't release it
+    mm_camera_buf_def_t *src_reproc_bufs;
+    mm_camera_super_buf_t *src_reproc_frame;// source frame (need to be
+                                            //returned back to kernel after done)
+    uint8_t offline_buffer;
+    mm_camera_buf_def_t *offline_reproc_buf; //HAL processed buffer
+} qcamera_hal_pp_data_t;
+
+typedef struct {
     uint32_t jobId;                  // job ID (obtained when start_jpeg_job)
     jpeg_job_status_t status;        // jpeg encoding status
     mm_jpeg_output_t out_data;         // ptr to jpeg output buf
@@ -111,7 +128,15 @@ typedef struct {
     qcamera_release_data_t   release_data; // any data needs to be release after notify
 } qcamera_data_argm_t;
 
-#define MAX_EXIF_TABLE_ENTRIES 50
+typedef enum {
+    QCAMERA_HAL_PP_TYPE_UNDEFINED = 0,       // default undefined type
+    QCAMERA_HAL_PP_TYPE_DUAL_FOV,            // dual camera Wide+Tele Dual FOV blending
+    QCAMERA_HAL_PP_TYPE_BOKEH,               // dual camera Wide+Tele Snapshot Bokeh
+    QCAMERA_HAL_PP_TYPE_CLEARSIGHT,          // dual camera Bayer+Mono Clearsight
+    QCAMERA_HAL_PP_TYPE_MAX
+} HALPPType;
+
+#define MAX_EXIF_TABLE_ENTRIES 17
 class QCameraExif
 {
 public:
@@ -158,10 +183,9 @@ public:
             mm_camera_super_buf_t *src_frame);
     static void processHalPPDataCB(qcamera_hal_pp_data_t *pOutput, void* pUserData);
     static void getHalPPOutputBufferCB(uint32_t frameIndex, void* pUserData);
-    static void releaseSuperBuf(mm_camera_super_buf_t *super_buf, void* pUserData);
     QCameraMemory *mOfflineDataBufs;
     QCameraChannel *getChannelByHandle(uint32_t channelHandle);
-    bool isHalPPEnabled() { return (m_pHalPPManager != NULL);}
+    bool isHalPPEnabled() { return (m_halPP != NULL);}
     void releaseSuperBuf(mm_camera_super_buf_t *super_buf);
     QCamera2HardwareInterface *m_parent;
 private:
@@ -215,8 +239,7 @@ private:
     void getHalPPOutputBuffer(uint32_t frameIndex);
     int32_t doReprocess();
     int32_t stopCapture();
-    void createHalPPManager();
-    int32_t initHalPPManager();
+    int32_t initHALPP();
 private:
     jpeg_encode_callback_t     mJpegCB;
     void *                     mJpegUserData;
@@ -261,7 +284,8 @@ private:
     Vector<mm_camera_buf_def_t *> m_InputMetadata; // store input metadata buffers for AOST cases
     size_t m_PPindex;                   // counter for each incoming AOST buffer
     pthread_mutex_t m_reprocess_lock;   // lock to ensure reprocess job is not freed early.
-    QCameraHALPPManager *m_pHalPPManager;              // HAL Post process block
+    HALPPType m_halPPType;              // HAL Post process type
+    QCameraHALPP *m_halPP;              // HAL Post process block
 
 public:
     cam_dimension_t m_dst_dim;

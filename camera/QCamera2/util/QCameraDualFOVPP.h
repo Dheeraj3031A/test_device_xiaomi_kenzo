@@ -34,7 +34,6 @@
 #include "QCameraHALPP.h"
 
 #define WIDE_TELE_CAMERA_NUMBER 2
-
 enum halPPInputType {
     WIDE_INPUT = 0,
     TELE_INPUT = 1
@@ -44,6 +43,14 @@ enum dualfov_af_status_t {
     AF_STATUS_VALID,
     AF_STATUS_INVALID
 };
+
+typedef struct _cam_frame_size_t {
+    uint32_t width;
+    uint32_t height;
+    uint32_t stride;
+    uint32_t scanline;
+    uint32_t frame_len;
+} cam_frame_size_t;
 
 typedef struct _dualfov_input_params_t {
     cam_frame_size_t wide;
@@ -77,11 +84,13 @@ public:
 protected:
     bool canProcess();
 private:
-    void getInputParams(mm_camera_buf_def_t *pMainMetaBuf,
-                        mm_camera_buf_def_t *pAuxMetaBuf,
-                        cam_frame_len_offset_t main_offset,
-                        cam_frame_len_offset_t aux_offset,
-                        dualfov_input_params_t& inParams);
+    mm_camera_buf_def_t* getSnapshotBuf(qcamera_hal_pp_data_t* pData,
+            QCameraStream* &pSnapshotStream);
+    mm_camera_buf_def_t* getMetadataBuf(qcamera_hal_pp_data_t* pData,
+            QCameraStream* &pMetadataStream);
+    void getInputParams(mm_camera_buf_def_t *pMainMetaBuf, mm_camera_buf_def_t *pAuxMetaBuf,
+            QCameraStream* pMainSnapshotStream, QCameraStream* pAuxSnapshotStream,
+            dualfov_input_params_t& inParams);
     int32_t doDualFovPPInit();
     int32_t doDualFovPPProcess(const uint8_t* pWide, const uint8_t* pTele,
             dualfov_input_params_t inParams, uint8_t* pOut);

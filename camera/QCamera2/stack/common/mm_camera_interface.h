@@ -32,8 +32,7 @@
 
 // System dependencies
 #include <media/msmb_camera.h>
-#include <linux/media.h>
-
+#include <stdbool.h>
 
 // Camera dependencies
 #include "cam_intf.h"
@@ -410,8 +409,6 @@ typedef enum {
     MM_CAMERA_CB_REQ_TYPE_SWITCH,
     MM_CAMERA_CB_REQ_TYPE_FRAME_SYNC,
     MM_CAMERA_CB_REQ_TYPE_ALL_CB,
-    MM_CAMERA_CB_REQ_TYPE_DEFER,
-    MM_CAMERA_CB_REQ_TYPE_SHARE_FRAME
 } mm_camera_cb_req_type;
 
 /** mm_camera_intf_cb_req_type: structure to request different mode of stream callback
@@ -757,22 +754,46 @@ typedef struct {
     /** start_channel: fucntion definition for starting a channel
      *    @camera_handle : camer handler
      *    @ch_id : channel handler
+     *    @start_sensor_streaming: whether to start sensor streaming.
+     *                             If false, start_sensor_streaming() must be
+     *                             called to start sensor streaming.
+     *
      *  Return value: 0 -- success
      *                -1 -- failure
-     * This call will start all streams belongs to the channel
+     * This call will start all streams belongs to the channel.
      **/
     int32_t (*start_channel) (uint32_t camera_handle,
-                              uint32_t ch_id);
+                              uint32_t ch_id, bool start_sensor_streaming);
+
+    /**
+     * start_sensor_streaming: function definition for starting sensor
+     *                         streaming.
+     *   @camera_handle : camera handler
+     *   @ch_id : channel handler
+     *
+     *  Return value: 0 -- success
+     *                -1 -- failure
+     * This call will start sensor streaming if start_channel() was called with
+     * start_sensor_streaming == FALSE.
+     */
+    int32_t (*start_sensor_streaming) (uint32_t camera_handle,
+                                       uint32_t ch_id);
 
     /** stop_channel: fucntion definition for stopping a channel
      *    @camera_handle : camer handler
      *    @ch_id : channel handler
+     *    @stop_immediately : whether to stop channel immediately. If true,
+     *                        streams will be stopped immediately without
+     *                        waiting for frame boundary. If false, streams
+     *                        will be stopped cleanly, which may wait for frame
+     *                        boundary based on stream conditions.
      *  Return value: 0 -- success
      *                -1 -- failure
      * This call will stop all streams belongs to the channel
      **/
     int32_t (*stop_channel) (uint32_t camera_handle,
-                             uint32_t ch_id);
+                             uint32_t ch_id,
+                             bool stop_immediately);
 
     /** qbuf: fucntion definition for queuing a frame buffer back to
      *        kernel for reuse
@@ -976,13 +997,13 @@ int32_t mm_stream_calc_offset_snapshot(cam_format_t fmt,
         cam_padding_info_t *padding,
         cam_stream_buf_plane_info_t *buf_planes);
 
-int32_t mm_stream_calc_offset_raw(cam_format_t fmt,
+int32_t mm_stream_calc_offset_raw(cam_stream_info_t *stream_info,
         cam_dimension_t *dim,
         cam_padding_info_t *padding,
         cam_stream_buf_plane_info_t *buf_planes);
 
-int32_t mm_stream_calc_offset_video(cam_stream_info_t *stream_info,
-        cam_padding_info_t *padding,
+int32_t mm_stream_calc_offset_video(cam_format_t fmt,
+        cam_dimension_t *dim,
         cam_stream_buf_plane_info_t *buf_planes);
 
 int32_t mm_stream_calc_offset_metadata(cam_dimension_t *dim,
@@ -1021,8 +1042,4 @@ uint32_t get_aux_camera_handle(uint32_t handle);
 
 /*Validate 2 handle if it is belong to same instance of camera/channel/stream*/
 uint8_t validate_handle(uint32_t src_handle, uint32_t handle);
-
-int mm_camera_util_match_subdev_type(struct media_entity_desc entity,
-     uint32_t gid, uint32_t type);
-
 #endif /*__MM_CAMERA_INTERFACE_H__*/

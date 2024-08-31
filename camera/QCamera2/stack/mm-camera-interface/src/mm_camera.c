@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2016, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -35,8 +35,9 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 #include <dlfcn.h>
 #define IOCTL_H <SYSTEM_HEADER_PREFIX/ioctl.h>
 #include IOCTL_H
@@ -48,6 +49,7 @@
 #include "mm_camera_interface.h"
 #include "mm_camera.h"
 #include "mm_camera_muxer.h"
+#include "cam_cond.h"
 
 #define SET_PARM_BIT32(parm, parm_arr) \
     (parm_arr[parm/32] |= (1<<(parm%32)))
@@ -266,7 +268,6 @@ int32_t mm_camera_open(mm_camera_obj_t *my_obj)
     int cam_idx = 0;
     const char *dev_name_value = NULL;
     int l_errno = 0;
-    pthread_condattr_t cond_attr;
 
     LOGD("begin\n");
 
@@ -349,14 +350,10 @@ int32_t mm_camera_open(mm_camera_obj_t *my_obj)
     }
 #endif /* DAEMON_PRESENT */
 
-    pthread_condattr_init(&cond_attr);
-    pthread_condattr_setclock(&cond_attr, CLOCK_MONOTONIC);
-
     pthread_mutex_init(&my_obj->msg_lock, NULL);
     pthread_mutex_init(&my_obj->cb_lock, NULL);
     pthread_mutex_init(&my_obj->evt_lock, NULL);
-    pthread_cond_init(&my_obj->evt_cond, &cond_attr);
-    pthread_condattr_destroy(&cond_attr);
+    PTHREAD_COND_INIT(&my_obj->evt_cond);
 
     LOGD("Launch evt Thread in Cam Open");
     snprintf(my_obj->evt_thread.threadName, THREAD_NAME_SIZE, "CAM_Dispatch");
@@ -458,7 +455,6 @@ int32_t mm_camera_close(mm_camera_obj_t *my_obj)
     pthread_mutex_destroy(&my_obj->evt_lock);
     pthread_cond_destroy(&my_obj->evt_cond);
     pthread_mutex_unlock(&my_obj->cam_lock);
-
     return 0;
 }
 
@@ -1269,23 +1265,9 @@ int32_t mm_camera_start_channel(mm_camera_obj_t *my_obj, uint32_t ch_id)
     return rc;
 }
 
-/*===========================================================================
- * FUNCTION   : mm_camera_stop_channel
- *
- * DESCRIPTION: stop a channel, which will stop all streams in the channel
- *
- * PARAMETERS :
- *   @my_obj       : camera object
- *   @ch_id        : channel handle
- *
- * RETURN     : int32_t type of status
- *              0  -- success
- *              -1 -- failure
- *==========================================================================*/
-int32_t mm_camera_stop_channel(mm_camera_obj_t *my_obj,
-                               uint32_t ch_id)
+int32_t mm_camera_start_sensor_stream_on(mm_camera_obj_t *my_obj, uint32_t ch_id)
 {
-    int32_t rc = 0;
+    int32_t rc = -1;
     mm_channel_t * ch_obj =
         mm_camera_util_get_channel_by_handler(my_obj, ch_id);
 
@@ -1294,8 +1276,44 @@ int32_t mm_camera_stop_channel(mm_camera_obj_t *my_obj,
         pthread_mutex_unlock(&my_obj->cam_lock);
 
         rc = mm_channel_fsm_fn(ch_obj,
-                               MM_CHANNEL_EVT_STOP,
+                               MM_CHANNEL_EVT_START_SENSOR_STREAMING,
                                NULL,
+                               NULL);
+    } else {
+        pthread_mutex_unlock(&my_obj->cam_lock);
+    }
+
+    return rc;
+}
+
+/*===========================================================================
+ * FUNCTION   : mm_camera_stop_channel
+ *
+ * DESCRIPTION: stop a channel, which will stop all streams in the channel
+ *
+ * PARAMETERS :
+ *   @my_obj           : camera object
+ *   @ch_id            : channel handle
+ *   @stop_immediately : stop channel immediately without waiting for frame
+ *                       boundary.
+ *
+ * RETURN     : int32_t type of status
+ *              0  -- success
+ *              -1 -- failure
+ *==========================================================================*/
+int32_t mm_camera_stop_channel(mm_camera_obj_t *my_obj,
+                               uint32_t ch_id, bool stop_immediately)
+{
+    int32_t rc = 0;
+    mm_channel_t * ch_obj =
+        mm_camera_util_get_channel_by_handler(my_obj, ch_id);
+
+    if (NULL != ch_obj) {
+        pthread_mutex_lock(&ch_obj->ch_lock);
+        pthread_mutex_unlock(&my_obj->cam_lock);
+        rc = mm_channel_fsm_fn(ch_obj,
+                               MM_CHANNEL_EVT_STOP,
+                               &stop_immediately,
                                NULL);
     } else {
         pthread_mutex_unlock(&my_obj->cam_lock);
@@ -2537,7 +2555,7 @@ pthread_mutex_t dbg_log_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static int         cam_soft_assert     = 0;
 static FILE       *cam_log_fd          = NULL;
-static const char *cam_log_filename    = QCAMERA_DUMP_FRM_LOCATION"cam_dbg_log_hal.txt";
+static const char *cam_log_filename    = "/data/misc/camera/cam_dbg_log_hal.txt";
 
 #undef LOG_TAG
 #define LOG_TAG "QCamera"
@@ -2574,13 +2592,13 @@ typedef struct {
 
 static module_debug_t cam_loginfo[(int)CAM_LAST_MODULE] = {
   {CAM_GLBL_DBG_ERR, 1,
-      "",         "persist.vendor.camera.global.debug"     }, /* CAM_NO_MODULE     */
+      "",         "persist.camera.global.debug"     }, /* CAM_NO_MODULE     */
   {CAM_GLBL_DBG_ERR, 1,
-      "<HAL>", "persist.vendor.camera.hal.debug"        }, /* CAM_HAL_MODULE    */
+      "<HAL>", "persist.camera.hal.debug"        }, /* CAM_HAL_MODULE    */
   {CAM_GLBL_DBG_ERR, 1,
-      "<MCI>", "persist.vendor.camera.mci.debug"        }, /* CAM_MCI_MODULE    */
+      "<MCI>", "persist.camera.mci.debug"        }, /* CAM_MCI_MODULE    */
   {CAM_GLBL_DBG_ERR, 1,
-      "<JPEG>", "persist.vendor.camera.mmstill.logs"     }, /* CAM_JPEG_MODULE   */
+      "<JPEG>", "persist.camera.mmstill.logs"     }, /* CAM_JPEG_MODULE   */
 };
 
 /** cam_get_dbg_level
@@ -2767,12 +2785,12 @@ void mm_camera_set_dbg_log_properties(void) {
     mm_camera_set_dbg_log_properties();
 
     /* configure asserts */
-    property_get("persist.vendor.camera.debug.assert", property_value, "0");
+    property_get("persist.camera.debug.assert", property_value, "0");
     cam_soft_assert = atoi(property_value);
 
     /* open default log file according to property setting */
     if (cam_log_fd == NULL) {
-      property_get("persist.vendor.camera.debug.logfile", property_value, "0");
+      property_get("persist.camera.debug.logfile", property_value, "0");
       if (atoi(property_value)) {
         /* we always put the current process id at end of log file name */
         char pid_str[255] = {0};
@@ -2790,6 +2808,7 @@ void mm_camera_set_dbg_log_properties(void) {
           ALOGD("Debug log file %s open\n", new_log_file_name);
         }
       } else {
+        property_set("persist.camera.debug.logfile", "0");
         ALOGD("Debug log file is not enabled");
         return;
       }
@@ -2803,9 +2822,11 @@ void mm_camera_set_dbg_log_properties(void) {
    *  Return: N/A
    **/
   void mm_camera_debug_close(void) {
+
     if (cam_log_fd != NULL) {
       fclose(cam_log_fd);
       cam_log_fd = NULL;
     }
+
   }
 #endif
