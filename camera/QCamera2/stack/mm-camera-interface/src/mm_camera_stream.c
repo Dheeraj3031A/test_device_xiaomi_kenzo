@@ -95,17 +95,11 @@ int32_t mm_stream_calc_offset_post_view(cam_stream_info_t *stream_info,
                                       cam_padding_info_t *padding,
                                       cam_stream_buf_plane_info_t *buf_planes);
 
-int32_t mm_stream_calc_offset_snapshot(cam_format_t fmt,
-                                       cam_dimension_t *dim,
-                                       cam_padding_info_t *padding,
-                                       cam_stream_buf_plane_info_t *buf_planes);
 int32_t mm_stream_calc_offset_raw(cam_format_t fmt,
                                   cam_dimension_t *dim,
                                   cam_padding_info_t *padding,
                                   cam_stream_buf_plane_info_t *buf_planes);
-int32_t mm_stream_calc_offset_video(cam_format_t fmt,
-        cam_dimension_t *dim,
-        cam_stream_buf_plane_info_t *buf_planes);
+
 int32_t mm_stream_calc_offset_metadata(cam_dimension_t *dim,
                                        cam_padding_info_t *padding,
                                        cam_stream_buf_plane_info_t *buf_planes);
@@ -2982,7 +2976,7 @@ int32_t mm_stream_calc_offset_preview(cam_stream_info_t *stream_info,
 
     default:
         LOGE("Invalid cam_format for preview %d",
-                    stream_info->fmt);
+                    my_obj->stream_info->fmt);
         rc = -1;
         break;
     }
@@ -3016,7 +3010,7 @@ int32_t mm_stream_calc_offset_post_view(cam_stream_info_t *stream_info,
     uint32_t width_padding = 0;
     uint32_t height_padding = 0;
 
-    switch (stream_info->fmt) {
+    switch (my_obj->stream_info->fmt) {
     case CAM_FORMAT_YUV_420_NV12:
     case CAM_FORMAT_YUV_420_NV21:
     case CAM_FORMAT_Y_ONLY:
@@ -3332,7 +3326,7 @@ int32_t mm_stream_calc_offset_post_view(cam_stream_info_t *stream_info,
         break;
     default:
         LOGE("Invalid cam_format for preview %d",
-                    stream_info->fmt);
+                    my_obj->stream_info->fmt);
         rc = -1;
         break;
     }
@@ -4677,35 +4671,35 @@ int32_t mm_stream_calc_offset_postproc(cam_stream_info_t *stream_info,
         break;
     case CAM_STREAM_TYPE_SNAPSHOT:
     case CAM_STREAM_TYPE_CALLBACK:
-        rc = mm_stream_calc_offset_snapshot(stream_info->fmt,
+        rc = mm_stream_calc_offset_snapshot(my_obj->stream_info->fmt,
                                             &stream_info->dim,
                                             padding,
                                             plns);
         break;
     case CAM_STREAM_TYPE_VIDEO:
-        rc = mm_stream_calc_offset_video(stream_info->fmt,
+        rc = mm_stream_calc_offset_video(my_obj->stream_info->fmt,
                 &stream_info->dim, plns);
         break;
     case CAM_STREAM_TYPE_RAW:
-        rc = mm_stream_calc_offset_raw(stream_info->fmt,
-                                       &stream_info->dim,
+        rc = mm_stream_calc_offset_raw(my_obj->stream_info->fmt,
+                                       &my_obj->stream_info->dim,
                                        padding,
                                        plns);
         break;
     case CAM_STREAM_TYPE_ANALYSIS:
-        rc = mm_stream_calc_offset_analysis(stream_info->fmt,
-                                            &stream_info->dim,
+        rc = mm_stream_calc_offset_analysis(my_obj->stream_info->fmt,
+                                            &my_obj->stream_info->dim,
                                             padding,
                                             plns);
         break;
     case CAM_STREAM_TYPE_METADATA:
-        rc = mm_stream_calc_offset_metadata(&stream_info->dim,
+        rc = mm_stream_calc_offset_metadata(&my_obj->stream_info->dim,
                                             padding,
                                             plns);
         break;
     case CAM_STREAM_TYPE_OFFLINE_PROC:
-        rc = mm_stream_calc_offset_snapshot(stream_info->fmt,
-                &stream_info->dim, padding, plns);
+        rc = mm_stream_calc_offset_snapshot(my_obj->stream_info->fmt,
+                &my_obj->stream_info->dim, padding, plns);
         break;
     default:
         LOGE("not supported for stream type %d",
