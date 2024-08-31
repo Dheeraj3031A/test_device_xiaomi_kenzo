@@ -1,4 +1,4 @@
-/*Copyright (c) 2012, 2016, The Linux Foundation. All rights reserved.
+/*Copyright (c) 2012, The Linux Foundation. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -28,20 +28,20 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.*/
 #ifndef QOMX_CORE_H
 #define QOMX_CORE_H
 
-// To remove (after PanoNative is updated)
+#include <stdio.h>
 #include <string.h>
-
-// System dependencies
+#include <unistd.h>
+#include <malloc.h>
 #include <pthread.h>
-
-// OpenMAX dependencies
+#include <dlfcn.h>
+#include <stdlib.h>
 #include "OMX_Component.h"
 
 #define TRUE 1
 #define FALSE 0
 #define OMX_COMP_MAX_INSTANCES 3
 #define OMX_CORE_MAX_ROLES 1
-#define OMX_COMP_MAX_NUM 5
+#define OMX_COMP_MAX_NUM 3
 #define OMX_SPEC_VERSION 0x00000101
 
 typedef void *(*get_instance_t)(void);
