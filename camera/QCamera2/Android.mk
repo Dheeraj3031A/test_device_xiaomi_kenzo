@@ -101,12 +101,8 @@ LOCAL_C_INCLUDES := \
         $(LOCAL_PATH)/stack/mm-camera-interface/inc \
         $(LOCAL_PATH)/util \
         $(LOCAL_PATH)/HAL3 \
-        hardware/libhardware/include/hardware \
-        $(SRC_MEDIA_HAL_DIR)/libstagefrighthw \
-        $(SRC_MEDIA_HAL_DIR)/mm-core/inc \
-        system/core/include/cutils \
-        system/core/include/system \
-        system/media/camera/include/system
+        hardware/qcom-caf/msm8952/media/libstagefrighthw \
+        hardware/qcom-caf/msm8952/media/mm-core/inc
 
 #HAL 1.0 Include paths
 LOCAL_C_INCLUDES += \
@@ -143,7 +139,7 @@ LOCAL_C_INCLUDES += \
         $(TARGET_OUT_HEADERS)/mm-core/omxcore \
         $(TARGET_OUT_HEADERS)/qcom/display
 LOCAL_C_INCLUDES += \
-        $(SRC_DISPLAY_HAL_DIR)/libqservice
+        hardware/qcom-caf/msm8952/display/libqservice
 LOCAL_SHARED_LIBRARIES := liblog libhardware libutils libcutils libdl libsync
 LOCAL_SHARED_LIBRARIES += libmmcamera_interface libmmjpeg_interface libui libcamera_metadata
 LOCAL_SHARED_LIBRARIES += libqdMetaData libqservice libbinder libbinder_ndk
