@@ -1,4 +1,4 @@
-/* Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -30,13 +30,13 @@
 #ifndef __MM_JPEG_IONBUF_H__
 #define __MM_JPEG_IONBUF_H__
 
-// System dependencies
+
+#include <stdio.h>
 #include <linux/msm_ion.h>
-#if TARGET_ION_ABI_VERSION >= 2
-#include <ion/ion.h>
-#include <linux/dma-buf.h>
-#endif //TARGET_ION_ABI_VERSION
-// JPEG dependencies
+#include <sys/mman.h>
+#include <unistd.h>
+#include <errno.h>
+#include <fcntl.h>
 #include "mm_jpeg_dbg.h"
 
 typedef struct  {
@@ -89,35 +89,6 @@ int buffer_deallocate(buffer_t *p_buffer);
  *
  **/
 int buffer_invalidate(buffer_t *p_buffer);
-
-/** buffer_clean:
- *
- *  Arguments:
- *     @p_buffer: ION buffer
- *
- *  Return:
- *     error val
- *
- *  Description:
- *      clean the cached buffer
- *
- **/
-int buffer_clean(buffer_t *p_buffer);
-
-/** buffer_cache_ops:
- *
- *  Arguments:
- *     @p_buffer: ION buffer
- *     @uint32_t cmd
- *
- *  Return:
- *     error val
- *
- *  Description:
- *      buffer cache ops based on comd.
- *
- **/
-int buffer_cache_ops(buffer_t *p_buffer, uint32_t cmd);
 
 #endif
 
