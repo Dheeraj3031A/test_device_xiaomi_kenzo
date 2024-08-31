@@ -30,7 +30,7 @@ LOCAL_CFLAGS += -DSYSTEM_HEADER_PREFIX=sys
 
 OMX_CORE_DIR := $(MM_JPEG_TEST_PATH)/../../../../mm-image-codec
 
-ifneq ($(TARGET_KERNEL_VERSION),$(filter $(TARGET_KERNEL_VERSION),3.18 4.4 4.9))
+ifneq (,$(filter $(strip $(SOMC_KERNEL_VERSION)),4.9 4.14))
 LOCAL_C_INCLUDES := \
     $(TOP)/system/core/libion/include \
     $(TOP)/system/core/libion/kernel-headers
@@ -54,11 +54,10 @@ LOCAL_VENDOR_MODULE := true
 include $(SDCLANG_COMMON_DEFS)
 LOCAL_PRELINK_MODULE   := false
 LOCAL_SHARED_LIBRARIES := libcutils libdl liblog libmmjpeg_interface
-ifneq ($(TARGET_KERNEL_VERSION),$(filter $(TARGET_KERNEL_VERSION),3.18 4.4 4.9))
 LOCAL_SHARED_LIBRARIES += libion
-endif
-include $(BUILD_EXECUTABLE)
 
+LOCAL_PROPRIETARY_MODULE := true
+include $(BUILD_EXECUTABLE)
 
 
 #decoder int test
@@ -81,7 +80,7 @@ LOCAL_CFLAGS += -DSYSTEM_HEADER_PREFIX=sys
 
 OMX_CORE_DIR := $(MM_JPEG_TEST_PATH)/../../../../mm-image-codec
 
-ifneq ($(TARGET_KERNEL_VERSION),$(filter $(TARGET_KERNEL_VERSION),3.18 4.4 4.9))
+ifneq (,$(filter $(strip $(SOMC_KERNEL_VERSION)),4.9 4.14))
 LOCAL_C_INCLUDES := \
     $(TOP)/system/core/libion/include \
     $(TOP)/system/core/libion/kernel-headers
@@ -105,9 +104,9 @@ LOCAL_VENDOR_MODULE := true
 include $(SDCLANG_COMMON_DEFS)
 LOCAL_PRELINK_MODULE   := false
 LOCAL_SHARED_LIBRARIES := libcutils libdl liblog libmmjpeg_interface
-ifneq ($(TARGET_KERNEL_VERSION),$(filter $(TARGET_KERNEL_VERSION),3.18 4.4 4.9))
 LOCAL_SHARED_LIBRARIES += libion
-endif
+
+LOCAL_PROPRIETARY_MODULE := true
 
 include $(BUILD_EXECUTABLE)
 

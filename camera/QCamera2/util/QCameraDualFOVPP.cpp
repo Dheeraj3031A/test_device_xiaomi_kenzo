@@ -171,7 +171,8 @@ int32_t QCameraDualFOVPP::feedInput(qcamera_hal_pp_data_t *pInputData)
     int32_t rc = NO_ERROR;
     LOGD("E");
     if (NULL != pInputData) {
-        mm_camera_buf_def_t *pInputSnapshotBuf = getSnapshotBuf(pInputData);
+        QCameraStream* pSnapshotStream = NULL;
+        mm_camera_buf_def_t *pInputSnapshotBuf = getSnapshotBuf(pInputData, pSnapshotStream);
         if (pInputSnapshotBuf != NULL) {
             uint32_t frameIndex = pInputSnapshotBuf->frame_idx;
             std::vector<qcamera_hal_pp_data_t*> *pVector = getFrameVector(frameIndex);
@@ -251,8 +252,10 @@ int32_t QCameraDualFOVPP::feedOutput(qcamera_hal_pp_data_t *pOutputData)
             qcamera_hal_pp_data_t *pInputDataWide = pVector->at(WIDE_INPUT);
             qcamera_hal_pp_data_t *pInputDataTele = pVector->at(TELE_INPUT);
 
-            mm_camera_buf_def_t *pBufWide = getSnapshotBuf(pInputDataWide);
-            mm_camera_buf_def_t *pBufTele = getSnapshotBuf(pInputDataTele);
+            QCameraStream* pSnapshotStreamWide = NULL;
+            QCameraStream* pSnapshotStreamTele = NULL;
+            mm_camera_buf_def_t *pBufWide = getSnapshotBuf(pInputDataWide, pSnapshotStreamWide);
+            mm_camera_buf_def_t *pBufTele = getSnapshotBuf(pInputDataTele, pSnapshotStreamTele);
             if (pBufWide == NULL || pBufTele == NULL) {
                 LOGE("%s buf is null",(pBufWide == NULL) ? "wide" : "tele");
                 return UNEXPECTED_NULL;
@@ -345,23 +348,28 @@ int32_t QCameraDualFOVPP::process()
             return UNEXPECTED_NULL;
         }
 
+        QCameraStream* pMainSnapshotStream = NULL;
+        QCameraStream* pMainMetadataStream = NULL;
+        QCameraStream* pAuxSnapshotStream  = NULL;
+        QCameraStream* pAuxMetadataStream  = NULL;
+
         mm_camera_buf_def_t *main_snapshot_buf =
-                getSnapshotBuf(pInputMainData);
+                getSnapshotBuf(pInputMainData, pMainSnapshotStream);
         if (main_snapshot_buf == NULL) {
             LOGE("main_snapshot_buf is NULL");
             return UNEXPECTED_NULL;
         }
-        mm_camera_buf_def_t *main_meta_buf = getMetadataBuf(pInputMainData);
+        mm_camera_buf_def_t *main_meta_buf = getMetadataBuf(pInputMainData, pMainMetadataStream);
         if (main_meta_buf == NULL) {
             LOGE("main_meta_buf is NULL");
             return UNEXPECTED_NULL;
         }
-        mm_camera_buf_def_t *aux_snapshot_buf = getSnapshotBuf(pInputAuxData);
+        mm_camera_buf_def_t *aux_snapshot_buf = getSnapshotBuf(pInputAuxData, pAuxSnapshotStream);
         if (aux_snapshot_buf == NULL) {
             LOGE("aux_snapshot_buf is NULL");
             return UNEXPECTED_NULL;
         }
-        mm_camera_buf_def_t *aux_meta_buf = getMetadataBuf(pInputAuxData);
+        mm_camera_buf_def_t *aux_meta_buf = getMetadataBuf(pInputAuxData, pAuxMetadataStream);
         if (aux_meta_buf == NULL) {
             LOGE("aux_meta_buf is NULL");
             return UNEXPECTED_NULL;
@@ -371,17 +379,27 @@ int32_t QCameraDualFOVPP::process()
         mm_camera_buf_def_t *output_snapshot_buf = output_frame->bufs[0];
 
         // Use offset info from reproc stream
-        cam_frame_len_offset_t frm_offset = pInputMainData->snap_offset;
-        LOGI("<Wide> stride:%d, scanline:%d, frame len:%d",
+        if (pMainSnapshotStream == NULL) {
+            LOGE("pMainSnapshotStream is NULL");
+            return UNEXPECTED_NULL;
+        }
+        cam_frame_len_offset_t frm_offset;
+        pMainSnapshotStream->getFrameOffset(frm_offset);
+        LOGI("<Wide> Stream type:%d, stride:%d, scanline:%d, frame len:%d",
+                pMainSnapshotStream->getMyType(),
                 frm_offset.mp[0].stride, frm_offset.mp[0].scanline,
                 frm_offset.frame_len);
         if (dumpimg) {
             dumpYUVtoFile((uint8_t *)main_snapshot_buf->buffer, frm_offset,
                     main_snapshot_buf->frame_idx, "wide");
         }
-
-        frm_offset = pInputAuxData->snap_offset;
-        LOGI("<Tele> stride:%d, scanline:%d, frame len:%d",
+        if (pAuxSnapshotStream == NULL) {
+            LOGE("pAuxSnapshotStream is NULL");
+            return UNEXPECTED_NULL;
+        }
+        pAuxSnapshotStream->getFrameOffset(frm_offset);
+        LOGI("<Tele> Stream type:%d, stride:%d, scanline:%d, frame len:%d",
+                pAuxSnapshotStream->getMyType(),
                 frm_offset.mp[0].stride, frm_offset.mp[0].scanline,
                 frm_offset.frame_len);
         if (dumpimg) {
@@ -391,9 +409,7 @@ int32_t QCameraDualFOVPP::process()
 
         //Get input and output parameter
         dualfov_input_params_t inParams;
-        getInputParams(main_meta_buf, aux_meta_buf,
-                                pInputMainData->snap_offset,
-                                pInputMainData->snap_offset,
+        getInputParams(main_meta_buf, aux_meta_buf, pMainSnapshotStream, pAuxSnapshotStream,
                 inParams);
         dumpInputParams(inParams);
 
@@ -403,9 +419,9 @@ int32_t QCameraDualFOVPP::process()
                         (uint8_t *)output_snapshot_buf->buffer);
 
         if (dumpimg) {
-            frm_offset = pInputMainData->snap_offset;
+            pMainSnapshotStream->getFrameOffset(frm_offset);
             if (aux_snapshot_buf->frame_len > main_snapshot_buf->frame_len) {
-                frm_offset = pInputAuxData->snap_offset;
+                pAuxSnapshotStream->getFrameOffset(frm_offset);
             }
             dumpYUVtoFile((uint8_t *)output_snapshot_buf->buffer, frm_offset,
                     main_snapshot_buf->frame_idx, "out");
@@ -413,22 +429,13 @@ int32_t QCameraDualFOVPP::process()
 
         /* clean and invalidate caches, for input and output buffers*/
         pOutputData->snapshot_heap->cleanInvalidateCache(0);
-        if (pInputMainData->jpeg_settings || pInputAuxData->jpeg_settings)
-        {
-            pOutputData->jpeg_settings = (jpeg_settings_t *)calloc(1,sizeof(jpeg_settings_t));
-            if (pOutputData->jpeg_settings == NULL) {
-                LOGE("No memory for src frame");
-                free(pOutputData);
-                return NO_MEMORY;
-            }
-            if(pInputMainData->jpeg_settings) {
-               memcpy(pOutputData->jpeg_settings, pInputMainData->jpeg_settings,
-                                                     sizeof(jpeg_settings_t));
-            } else if (pInputAuxData->jpeg_settings) {
-               memcpy(pOutputData->jpeg_settings, pInputAuxData->jpeg_settings,
-                                                      sizeof(jpeg_settings_t));
-            }
-        }
+
+        QCameraMemory *pMem = (QCameraMemory *)main_snapshot_buf->mem_info;
+        pMem->invalidateCache(main_snapshot_buf->buf_idx);
+
+        pMem = (QCameraMemory *)aux_snapshot_buf->mem_info;
+        pMem->invalidateCache(aux_snapshot_buf->buf_idx);
+
 
         // Calling cb function to return output_data after processed.
         LOGH("CB for output");
@@ -472,8 +479,8 @@ bool QCameraDualFOVPP::canProcess()
  * DESCRIPTION: Helper function to get input params from input metadata
  *==========================================================================*/
 void QCameraDualFOVPP::getInputParams(mm_camera_buf_def_t *pMainMetaBuf,
-        mm_camera_buf_def_t *pAuxMetaBuf, cam_frame_len_offset_t main_offset,
-        cam_frame_len_offset_t aux_offset, dualfov_input_params_t& inParams)
+        mm_camera_buf_def_t *pAuxMetaBuf, QCameraStream* pMainSnapshotStream,
+        QCameraStream* pAuxSnapshotStream, dualfov_input_params_t& inParams)
 {
     LOGD("E");
     memset(&inParams, 0, sizeof(dualfov_input_params_t));
@@ -481,18 +488,21 @@ void QCameraDualFOVPP::getInputParams(mm_camera_buf_def_t *pMainMetaBuf,
     metadata_buffer_t *pAuxMeta = (metadata_buffer_t *)pAuxMetaBuf->buffer;
 
     // Wide frame size
-    inParams.wide.width     = main_offset.mp[0].width;
-    inParams.wide.height    = main_offset.mp[0].height;
-    inParams.wide.stride    = main_offset.mp[0].stride;
-    inParams.wide.scanline  = main_offset.mp[0].scanline;
-    inParams.wide.frame_len = main_offset.frame_len;
+    cam_frame_len_offset_t offset;
+    pMainSnapshotStream->getFrameOffset(offset);
+    inParams.wide.width     = offset.mp[0].width;
+    inParams.wide.height    = offset.mp[0].height;
+    inParams.wide.stride    = offset.mp[0].stride;
+    inParams.wide.scanline  = offset.mp[0].scanline;
+    inParams.wide.frame_len = offset.frame_len;
 
     // Tele frame size
-    inParams.tele.width     = aux_offset.mp[0].width;
-    inParams.tele.height    = aux_offset.mp[0].height;
-    inParams.tele.stride    = aux_offset.mp[0].stride;
-    inParams.tele.scanline  = aux_offset.mp[0].scanline;
-    inParams.tele.frame_len = aux_offset.frame_len;
+    pAuxSnapshotStream->getFrameOffset(offset);
+    inParams.tele.width     = offset.mp[0].width;
+    inParams.tele.height    = offset.mp[0].height;
+    inParams.tele.stride    = offset.mp[0].stride;
+    inParams.tele.scanline  = offset.mp[0].scanline;
+    inParams.tele.frame_len = offset.frame_len;
 
     // user_zoom
     int32_t zoom_level = -1; // 0 means zoom 1x.

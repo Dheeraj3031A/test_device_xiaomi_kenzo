@@ -95,11 +95,17 @@ int32_t mm_stream_calc_offset_post_view(cam_stream_info_t *stream_info,
                                       cam_padding_info_t *padding,
                                       cam_stream_buf_plane_info_t *buf_planes);
 
+int32_t mm_stream_calc_offset_snapshot(cam_format_t fmt,
+                                       cam_dimension_t *dim,
+                                       cam_padding_info_t *padding,
+                                       cam_stream_buf_plane_info_t *buf_planes);
 int32_t mm_stream_calc_offset_raw(cam_format_t fmt,
                                   cam_dimension_t *dim,
                                   cam_padding_info_t *padding,
                                   cam_stream_buf_plane_info_t *buf_planes);
-
+int32_t mm_stream_calc_offset_video(cam_format_t fmt,
+        cam_dimension_t *dim,
+        cam_stream_buf_plane_info_t *buf_planes);
 int32_t mm_stream_calc_offset_metadata(cam_dimension_t *dim,
                                        cam_padding_info_t *padding,
                                        cam_stream_buf_plane_info_t *buf_planes);
@@ -872,7 +878,7 @@ int32_t mm_stream_fsm_reg(mm_stream_t * my_obj,
 
             pthread_mutex_lock(&my_obj->cmd_lock);
             if (has_cb) {
-                snprintf(my_obj->cmd_thread.threadName, THREAD_NAME_SIZE, "CAM_StrmAppDat");
+                snprintf(my_obj->cmd_thread.threadName, THREAD_NAME_SIZE, "CAM_StrmAppData");
                 mm_camera_cmd_thread_launch(&my_obj->cmd_thread,
                                             mm_stream_dispatch_app_data,
                                             (void *)my_obj);
@@ -2976,7 +2982,7 @@ int32_t mm_stream_calc_offset_preview(cam_stream_info_t *stream_info,
 
     default:
         LOGE("Invalid cam_format for preview %d",
-                    my_obj->stream_info->fmt);
+                    stream_info->fmt);
         rc = -1;
         break;
     }
@@ -3010,7 +3016,7 @@ int32_t mm_stream_calc_offset_post_view(cam_stream_info_t *stream_info,
     uint32_t width_padding = 0;
     uint32_t height_padding = 0;
 
-    switch (my_obj->stream_info->fmt) {
+    switch (stream_info->fmt) {
     case CAM_FORMAT_YUV_420_NV12:
     case CAM_FORMAT_YUV_420_NV21:
     case CAM_FORMAT_Y_ONLY:
@@ -3326,7 +3332,7 @@ int32_t mm_stream_calc_offset_post_view(cam_stream_info_t *stream_info,
         break;
     default:
         LOGE("Invalid cam_format for preview %d",
-                    my_obj->stream_info->fmt);
+                    stream_info->fmt);
         rc = -1;
         break;
     }
@@ -4671,35 +4677,35 @@ int32_t mm_stream_calc_offset_postproc(cam_stream_info_t *stream_info,
         break;
     case CAM_STREAM_TYPE_SNAPSHOT:
     case CAM_STREAM_TYPE_CALLBACK:
-        rc = mm_stream_calc_offset_snapshot(my_obj->stream_info->fmt,
+        rc = mm_stream_calc_offset_snapshot(stream_info->fmt,
                                             &stream_info->dim,
                                             padding,
                                             plns);
         break;
     case CAM_STREAM_TYPE_VIDEO:
-        rc = mm_stream_calc_offset_video(my_obj->stream_info->fmt,
+        rc = mm_stream_calc_offset_video(stream_info->fmt,
                 &stream_info->dim, plns);
         break;
     case CAM_STREAM_TYPE_RAW:
-        rc = mm_stream_calc_offset_raw(my_obj->stream_info->fmt,
-                                       &my_obj->stream_info->dim,
+        rc = mm_stream_calc_offset_raw(stream_info->fmt,
+                                       &stream_info->dim,
                                        padding,
                                        plns);
         break;
     case CAM_STREAM_TYPE_ANALYSIS:
-        rc = mm_stream_calc_offset_analysis(my_obj->stream_info->fmt,
-                                            &my_obj->stream_info->dim,
+        rc = mm_stream_calc_offset_analysis(stream_info->fmt,
+                                            &stream_info->dim,
                                             padding,
                                             plns);
         break;
     case CAM_STREAM_TYPE_METADATA:
-        rc = mm_stream_calc_offset_metadata(&my_obj->stream_info->dim,
+        rc = mm_stream_calc_offset_metadata(&stream_info->dim,
                                             padding,
                                             plns);
         break;
     case CAM_STREAM_TYPE_OFFLINE_PROC:
-        rc = mm_stream_calc_offset_snapshot(my_obj->stream_info->fmt,
-                &my_obj->stream_info->dim, padding, plns);
+        rc = mm_stream_calc_offset_snapshot(stream_info->fmt,
+                &stream_info->dim, padding, plns);
         break;
     default:
         LOGE("not supported for stream type %d",
@@ -4960,6 +4966,71 @@ int32_t mm_stream_set_fmt(mm_stream_t *my_obj)
 }
 
 /*===========================================================================
+ * FUNCTION   : mm_stream_cancel_buf
+ *
+ * DESCRIPTION: Get buffer back from kernel
+ *
+ * PARAMETERS :
+ *   @my_obj       : stream object
+ *   @buf_idx        : frame index to be de-queued back from kernel
+ *
+ * RETURN     : int32_t type of status
+ *              0  -- success
+ *              -1 -- failure
+ *==========================================================================*/
+int32_t mm_stream_cancel_buf(mm_stream_t * my_obj,
+                           uint32_t buf_idx)
+{
+    int32_t rc = 0;
+    LOGD("E, my_handle = 0x%x, fd = %d, state = %d",
+          my_obj->my_hdl, my_obj->fd, my_obj->state);
+
+    pthread_mutex_lock(&my_obj->buf_lock);
+    if(my_obj->buf_status[buf_idx].buf_refcnt != 0) {
+        LOGE("Error Trying to extract a frame already sent to HAL(idx=%d) count=%d\n",
+                    buf_idx,
+                   my_obj->buf_status[buf_idx].buf_refcnt);
+        pthread_mutex_unlock(&my_obj->buf_lock);
+        rc = -1;
+        return rc;
+    }
+    pthread_mutex_unlock(&my_obj->buf_lock);
+    if (my_obj->stream_info->streaming_mode == CAM_STREAMING_MODE_BATCH) {
+        /*rc = mm_stream_write_user_buf(my_obj, frame);*/
+        // TODO handling batch buffers
+    } else {
+        pthread_mutex_lock(&my_obj->buf_lock);
+        //my_obj->buf_status[buf_idx].buf_refcnt++;
+        {
+            pthread_mutex_unlock(&my_obj->buf_lock);
+            LOGD("<DEBUG> : Cancel Buffer done for buffer:%d, stream type:%d", buf_idx, my_obj->stream_info->stream_type);
+
+            struct msm_camera_return_buf bufid;
+            memset(&bufid, 0, sizeof(struct msm_camera_return_buf));
+            bufid.index = buf_idx;
+
+            struct msm_camera_private_ioctl_arg arg;
+            memset(&arg, 0, sizeof(struct msm_camera_private_ioctl_arg));
+            arg.id = MSM_CAMERA_PRIV_IOCTL_ID_RETURN_BUF;
+            arg.size = sizeof(struct msm_camera_return_buf);
+            arg.ioctl_ptr = (uint32_t) &bufid;
+
+
+            rc = ioctl(my_obj->fd, VIDIOC_MSM_CAMERA_PRIVATE_IOCTL_CMD, &arg);
+
+            if(rc < 0) {
+                LOGE("mm_stream_cancel_buf(idx=%d) err=%d\n",
+                            buf_idx, rc);
+            } else {
+                //my_obj->buf_status[frame->buf_idx].in_kernel = 0;
+            }
+        }
+    }
+    return rc;
+}
+
+
+/*===========================================================================
  * FUNCTION   : mm_stream_buf_done
  *
  * DESCRIPTION: enqueue buffer back to kernel
@@ -5149,3 +5220,4 @@ int32_t mm_stream_handle_cache_ops(mm_stream_t* my_obj,
 
     return rc;
 }
+
